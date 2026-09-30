@@ -10,7 +10,8 @@
     "format": "oxfmt",
     "test": "bun test lib",
     "test:vitest": "vitest",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "db:init": "bun scripts/init-db.ts"
   },
   "dependencies": {
     "@tailwindcss/typography": "^0.5.19",

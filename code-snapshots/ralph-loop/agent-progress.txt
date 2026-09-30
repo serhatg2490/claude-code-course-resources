@@ -23,3 +23,29 @@ Project initialized with:
 Ready to begin feature implementation.
 
 ---
+
+## Task: Create SQLite database with better-auth schema - 2026-09-30
+
+Completed:
+- `lib/schema.ts`: `AUTH_SCHEMA` SQL (user, session, account, verification, as in SPEC.MD §5.1)
+  and an idempotent `migrate(db)` function (`CREATE ... IF NOT EXISTS`)
+- `scripts/init-db.ts` + `bun run db:init`: creates `data/app.db` (WAL mode), applies the schema.
+  Honors `DATABASE_PATH` env var (defaults to `data/app.db`, which is gitignored)
+- `lib/schema.test.ts`: 8 bun tests on an in-memory DB covering tables, columns,
+  foreign keys, UNIQUE constraints, defaults, and idempotency
+
+Decisions:
+- Added `ON DELETE CASCADE` on session/account → user, plus indexes on their userId columns
+- `migrate()` takes a `Database` instance so `lib/db.ts` can call it on first connection
+  and tests can run it against `:memory:`
+- Foreign keys are enforced per connection: `lib/db.ts` must run `PRAGMA foreign_keys = ON`
+
+Notes:
+- Ran `bun install` (node_modules was missing)
+- `bun run test:e2e` currently fails with "No tests found": there's no playwright.config.ts yet,
+  so Playwright picks up the bun test files. This is handled by the "Set up Playwright" task
+  (its config should set testDir to e2e/)
+
+Next recommended steps:
+- Notes table + indexes: add a `NOTES_SCHEMA` to `lib/schema.ts` and include it in `migrate()`
+- Then `lib/db.ts` (getDb singleton that calls migrate + enables foreign_keys)
