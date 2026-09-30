@@ -1,6 +1,6 @@
 import type { JSONContent } from '@tiptap/react';
 import { nanoid } from 'nanoid';
-import { get, query } from './db';
+import { get, query, run } from './db';
 
 /**
  * A note as used throughout the app (see SPEC.MD §6.2).
@@ -152,4 +152,13 @@ export async function updateNote(
     },
   );
   return row ? toNote(row) : null;
+}
+
+/**
+ * Hard-deletes a note owned by `userId`. Returns `true` if it was deleted, or `false` when it doesn't
+ * exist or belongs to someone else (the two cases are indistinguishable, as in `getNoteById`).
+ */
+export async function deleteNote(userId: string, noteId: string): Promise<boolean> {
+  const { changes } = run('DELETE FROM notes WHERE id = ? AND user_id = ?', [noteId, userId]);
+  return changes > 0;
 }

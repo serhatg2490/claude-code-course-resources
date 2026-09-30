@@ -5,6 +5,7 @@ import {
   EMPTY_DOC_JSON,
   PUBLIC_SLUG_LENGTH,
   createNote,
+  deleteNote,
   generatePublicSlug,
   getNoteById,
   getNotesByUser,
@@ -310,10 +311,66 @@ describe('updateNote', () => {
   });
 
   test('does not change public sharing state', async () => {
-    run("UPDATE notes SET is_public = 1, public_slug = 'abcdefghijklmnopqrstu' WHERE id = 'note-1'");
+    run(
+      "UPDATE notes SET is_public = 1, public_slug = 'abcdefghijklmnopqrstu' WHERE id = 'note-1'",
+    );
 
     const note = await updateNote('user-1', 'note-1', { title: 'Still shared' });
 
     expect(note).toMatchObject({ isPublic: true, publicSlug: 'abcdefghijklmnopqrstu' });
+  });
+});
+
+describe('deleteNote', () => {
+  beforeEach(() => {
+    run("INSERT INTO user (id, name, email) VALUES ('user-1', 'Ada', 'ada@example.com')");
+    run("INSERT INTO user (id, name, email) VALUES ('user-2', 'Grace', 'grace@example.com')");
+  });
+
+  test("deletes the owner's note and returns true", async () => {
+    const note = await createNote('user-1');
+
+    expect(await deleteNote('user-1', note.id)).toBe(true);
+    expect(await getNoteById('user-1', note.id)).toBeNull();
+  });
+
+  test("returns false and keeps another user's note", async () => {
+    const note = await createNote('user-1', { title: 'Keep me' });
+
+    expect(await deleteNote('user-2', note.id)).toBe(false);
+    expect(await getNoteById('user-1', note.id)).toEqual(note);
+  });
+
+  test('returns false for a note that does not exist', async () => {
+    expect(await deleteNote('user-1', 'missing')).toBe(false);
+  });
+
+  test('returns false when deleting the same note twice', async () => {
+    const note = await createNote('user-1');
+
+    expect(await deleteNote('user-1', note.id)).toBe(true);
+    expect(await deleteNote('user-1', note.id)).toBe(false);
+  });
+
+  test("only deletes the targeted note, leaving the user's other notes", async () => {
+    const doomed = await createNote('user-1', { title: 'Doomed' });
+    const kept = await createNote('user-1', { title: 'Kept' });
+
+    await deleteNote('user-1', doomed.id);
+
+    expect(await getNotesByUser('user-1')).toEqual([kept]);
+  });
+
+  test('frees the public slug of a deleted shared note', async () => {
+    const note = await createNote('user-1');
+    run("UPDATE notes SET is_public = 1, public_slug = 'abcdefghijklmnopqrstu' WHERE id = ?", [
+      note.id,
+    ]);
+
+    await deleteNote('user-1', note.id);
+
+    expect(
+      get<NoteRow>("SELECT * FROM notes WHERE public_slug = 'abcdefghijklmnopqrstu'"),
+    ).toBeUndefined();
   });
 });

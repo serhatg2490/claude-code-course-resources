@@ -225,3 +225,27 @@ Next recommended steps:
   (the PRD asks for a boolean, while SPEC.MD says `void`. Go with boolean so the action can return a 404-style error)
 - Then `setNotePublic` / `getNoteByPublicSlug` (keep an existing slug when re-enabling? SPEC.MD §7.2 says to generate
   one only if none exists, but disabling clears it, so re-enabling always gets a fresh slug)
+
+---
+
+## Task: Implement deleteNote function - 2026-09-30
+
+Completed:
+- `lib/notes.ts`: `async deleteNote(userId, noteId): Promise<boolean>`
+  - `DELETE FROM notes WHERE id = ? AND user_id = ?` through `run()`, returns `changes > 0`
+  - `false` covers both "doesn't exist" and "owned by someone else" (same non-probing behavior as `getNoteById`)
+- `lib/notes.test.ts`: 6 new tests (owner delete → true and gone, cross-user → false and note untouched,
+  missing → false, double delete → false, only the targeted note removed, a shared note's slug row is gone)
+
+Decisions:
+- Returns `boolean` rather than SPEC.MD's `void`, as the PRD asks, so `deleteNoteAction` can report "not found"
+
+Verified:
+- bun test (61 tests), lint and build pass. Changed files formatted with oxfmt. No UI changes, so no Playwright check
+- `test:e2e` still reports "No tests found" (no playwright.config.ts yet)
+
+Next recommended steps:
+- `setNotePublic(userId, noteId, isPublic)`: enabling → `is_public = 1, public_slug = COALESCE(public_slug, $slug)`,
+  disabling → `is_public = 0, public_slug = NULL`, both bump `updated_at`, `WHERE id AND user_id RETURNING *`
+- `getNoteByPublicSlug(slug)`: `WHERE public_slug = ? AND is_public = 1`
+- Then the auth tasks (lib/auth.ts with better-auth on the `getDb()` Bun Database)
