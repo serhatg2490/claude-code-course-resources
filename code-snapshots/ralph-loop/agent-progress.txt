@@ -74,3 +74,38 @@ Notes:
 Next recommended steps:
 - `lib/db.ts`: getDb() singleton (open `DATABASE_PATH` ?? `data/app.db`, WAL, `PRAGMA foreign_keys = ON`,
   call `migrate()`), plus typed `query<T>()`, `get<T>()`, `run()` wrappers
+
+---
+
+## Task: Build database access utilities (lib/db.ts) - 2026-09-30
+
+Completed:
+- `lib/db.ts`:
+  - `openDb(path)`: creates the parent directory, opens with `strict: true`, sets WAL,
+    `foreign_keys = ON` and `busy_timeout = 5000`, then runs `migrate()`
+  - `getDb()`: singleton cached on `globalThis` so Next.js dev reloads don't leak connections.
+    Reads `DATABASE_PATH` (default `data/app.db`) lazily, on first call
+  - `closeDb()`: closes the singleton; the next `getDb()` reopens
+  - `query<T>()`, `get<T>()` (returns `undefined` rather than Bun's `null`) and `run()` (returns
+    `Changes`). Params are `SqlParams`: a positional array or a named-binding object (no `$` prefix
+    in keys, because of strict mode). Statements go through `db.query()`, so they're cached
+- `scripts/init-db.ts` now reuses `getDb()`/`query()` rather than duplicating the connection setup
+- `lib/db.test.ts`: 12 bun tests (singleton, reopen after close, migrations applied, foreign keys
+  enforced, positional/named params, get → undefined, run change counts), using `DATABASE_PATH=:memory:`
+
+Verified:
+- `bun:sqlite` works inside Next.js 16 (Turbopack) under `bun --bun`. A throwaway RSC page importing
+  `@/lib/db` built and rendered correctly in `bun dev`, then was deleted. No `serverExternalPackages`
+  config was needed
+- build, lint and bun test (26 tests) all pass. `test:e2e` still reports "No tests found"
+  (no playwright.config.ts yet)
+
+Notes for next tasks:
+- Tests should set `process.env.DATABASE_PATH = ':memory:'` in `beforeEach` and call `closeDb()` in
+  `afterEach` to get a fresh, migrated DB per test
+- Only import `lib/db.ts` from server code (RSC, server actions, lib/auth.ts)
+
+Next recommended steps:
+- `lib/notes.ts`: Note type, row → Note mapper, `generatePublicSlug()` (nanoid, 16+ chars),
+  empty TipTap doc constant, then the repository functions
+- Or `lib/auth.ts`: better-auth can take the `getDb()` Bun Database instance directly (check docs via Context7)
