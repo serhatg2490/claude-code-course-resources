@@ -49,3 +49,28 @@ Notes:
 Next recommended steps:
 - Notes table + indexes: add a `NOTES_SCHEMA` to `lib/schema.ts` and include it in `migrate()`
 - Then `lib/db.ts` (getDb singleton that calls migrate + enables foreign_keys)
+
+---
+
+## Task: Create notes table with indexes - 2026-09-30
+
+Completed:
+- `lib/schema.ts`: `NOTES_SCHEMA` (notes table + idx_notes_user_id, idx_notes_public_slug,
+  idx_notes_is_public, as in SPEC.MD §5.1/§5.2); `migrate()` now applies it after `AUTH_SCHEMA`
+- `lib/schema.test.ts`: 6 new tests covering column types/NOT NULL/PK, the user_id foreign key
+  (including cascade delete and rejecting unknown users), UNIQUE public_slug (multiple NULLs allowed),
+  defaults (is_public = 0, created_at = updated_at), and the three indexes
+- Re-ran `bun run db:init`, so `data/app.db` now has the notes table
+
+Decisions:
+- `ON DELETE CASCADE` on notes.user_id → user(id), which matches session/account and cleans up a
+  deleted user's notes
+- Timestamps use SQLite `datetime('now')` format (`YYYY-MM-DD HH:MM:SS`, UTC). Repository updates
+  should set `updated_at = datetime('now')` in SQL so the format stays consistent
+
+Notes:
+- `bun run test:e2e` still reports "No tests found" (no playwright.config.ts yet, see previous entry)
+
+Next recommended steps:
+- `lib/db.ts`: getDb() singleton (open `DATABASE_PATH` ?? `data/app.db`, WAL, `PRAGMA foreign_keys = ON`,
+  call `migrate()`), plus typed `query<T>()`, `get<T>()`, `run()` wrappers

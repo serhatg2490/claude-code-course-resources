@@ -13,6 +13,12 @@ type ForeignKeyInfo = {
   table: string;
   from: string;
   to: string;
+  on_delete: string;
+};
+
+type IndexInfo = {
+  name: string;
+  unique: number;
 };
 
 let db: Database;
@@ -23,6 +29,17 @@ function columnsOf(table: string): ColumnInfo[] {
 
 function foreignKeysOf(table: string): ForeignKeyInfo[] {
   return db.query<ForeignKeyInfo, [string]>('SELECT * FROM pragma_foreign_key_list(?)').all(table);
+}
+
+function indexesOf(table: string): IndexInfo[] {
+  return db.query<IndexInfo, [string]>('SELECT * FROM pragma_index_list(?)').all(table);
+}
+
+function indexedColumnsOf(index: string): string[] {
+  return db
+    .query<{ name: string }, [string]>('SELECT name FROM pragma_index_info(?)')
+    .all(index)
+    .map((column) => column.name);
 }
 
 beforeEach(() => {
@@ -40,7 +57,9 @@ describe('migrate', () => {
       .all()
       .map((table) => table.name);
 
-    expect(tables).toEqual(expect.arrayContaining(['account', 'session', 'user', 'verification']));
+    expect(tables).toEqual(
+      expect.arrayContaining(['account', 'notes', 'session', 'user', 'verification']),
+    );
   });
 
   test('is idempotent', () => {
@@ -123,5 +142,79 @@ describe('migrate', () => {
       .get();
     expect(user?.emailVerified).toBe(0);
     expect(user?.createdAt).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
+  });
+});
+
+describe('notes table', () => {
+  beforeEach(() => {
+    db.run("INSERT INTO user (id, name, email) VALUES ('u1', 'A', 'a@x.io')");
+  });
+
+  test('has the expected columns', () => {
+    const columns = columnsOf('notes').map(({ name, type, notnull, pk }) => ({
+      name,
+      type,
+      notnull,
+      pk,
+    }));
+    expect(columns).toEqual([
+      { name: 'id', type: 'TEXT', notnull: 0, pk: 1 },
+      { name: 'user_id', type: 'TEXT', notnull: 1, pk: 0 },
+      { name: 'title', type: 'TEXT', notnull: 1, pk: 0 },
+      { name: 'content_json', type: 'TEXT', notnull: 1, pk: 0 },
+      { name: 'is_public', type: 'INTEGER', notnull: 1, pk: 0 },
+      { name: 'public_slug', type: 'TEXT', notnull: 0, pk: 0 },
+      { name: 'created_at', type: 'TEXT', notnull: 1, pk: 0 },
+      { name: 'updated_at', type: 'TEXT', notnull: 1, pk: 0 },
+    ]);
+  });
+
+  test('user_id references user(id) and cascades on delete', () => {
+    expect(foreignKeysOf('notes')).toEqual([
+      expect.objectContaining({ table: 'user', from: 'user_id', to: 'id', on_delete: 'CASCADE' }),
+    ]);
+
+    db.run("INSERT INTO notes (id, user_id, title, content_json) VALUES ('n1', 'u1', 'T', '{}')");
+    db.run("DELETE FROM user WHERE id = 'u1'");
+    const remaining = db.query<{ count: number }, []>('SELECT COUNT(*) AS count FROM notes').get();
+    expect(remaining?.count).toBe(0);
+  });
+
+  test('rejects notes for unknown users', () => {
+    expect(() =>
+      db.run(
+        "INSERT INTO notes (id, user_id, title, content_json) VALUES ('n1', 'missing', 'T', '{}')",
+      ),
+    ).toThrow(/FOREIGN KEY/);
+  });
+
+  test('public_slug is unique but allows multiple NULLs', () => {
+    db.run("INSERT INTO notes (id, user_id, title, content_json) VALUES ('n1', 'u1', 'T', '{}')");
+    db.run("INSERT INTO notes (id, user_id, title, content_json) VALUES ('n2', 'u1', 'T', '{}')");
+    db.run("UPDATE notes SET public_slug = 'slug' WHERE id = 'n1'");
+    expect(() => db.run("UPDATE notes SET public_slug = 'slug' WHERE id = 'n2'")).toThrow(/UNIQUE/);
+  });
+
+  test('applies defaults for is_public and timestamps', () => {
+    db.run("INSERT INTO notes (id, user_id, title, content_json) VALUES ('n1', 'u1', 'T', '{}')");
+    const note = db
+      .query<
+        { is_public: number; public_slug: string | null; created_at: string; updated_at: string },
+        []
+      >("SELECT is_public, public_slug, created_at, updated_at FROM notes WHERE id = 'n1'")
+      .get();
+    expect(note?.is_public).toBe(0);
+    expect(note?.public_slug).toBeNull();
+    expect(note?.created_at).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
+    expect(note?.updated_at).toBe(note?.created_at);
+  });
+
+  test('has indexes on user_id, public_slug and is_public', () => {
+    const indexes = new Map(
+      indexesOf('notes').map((index) => [index.name, indexedColumnsOf(index.name)]),
+    );
+    expect(indexes.get('idx_notes_user_id')).toEqual(['user_id']);
+    expect(indexes.get('idx_notes_public_slug')).toEqual(['public_slug']);
+    expect(indexes.get('idx_notes_is_public')).toEqual(['is_public']);
   });
 });
