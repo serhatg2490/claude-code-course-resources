@@ -352,3 +352,41 @@ Notes for next tasks:
 Next recommended steps:
 - `getSession()` / `requireAuth()` in lib/auth.ts (`auth.api.getSession({ headers: await headers() })`, `redirect('/authenticate')`)
 - `lib/auth-client.ts` (`createAuthClient` from `better-auth/react`)
+
+---
+
+## Task: Implement server-side auth helpers - 2026-09-30
+
+Completed:
+- `lib/auth.ts`:
+  - `createSessionHelpers(authInstance)` returns `{ getSession, requireAuth }`, following the same factory + singleton
+    pattern as `createAuth`/`auth`. The app uses `export const { getSession, requireAuth } = createSessionHelpers(auth)`
+  - `getSession()`: `auth.api.getSession({ headers: await headers() })` → `{ session, user } | null`. Wrapped in React
+    `cache()`, so a layout (the Header) and a page rendering in the same request share one SQLite lookup
+  - `requireAuth()`: returns the non-null session, or `redirect(SIGN_IN_PATH)` (`/authenticate`). `redirect()` returns
+    `never`, so callers get a non-null session type without assertions
+  - `SIGN_IN_PATH` and the `Auth` type are exported
+- `lib/auth.test.ts`: 6 new tests. `next/headers` and `next/navigation` are replaced with `mock.module`: `headers()` returns
+  a per-test `requestHeaders`, and `redirect()` throws a local `RedirectError` carrying the URL (no Next.js internals).
+  Covered: signed-in user, no cookie → null, forged token → null, after sign-out → null, requireAuth returns the session,
+  requireAuth redirects to `/authenticate`
+
+Decisions:
+- A factory rather than helpers bound directly to the `auth` singleton: `bun test` shares one module registry across files,
+  and `lib/db.test.ts` / `lib/notes.test.ts` call `closeDb()`, which closes the connection the `auth` singleton captured at
+  import. Tests must build their own instance with `createAuth(openDb(':memory:'))` and `createSessionHelpers()`
+- `requireAuth()` redirects instead of throwing, so it works the same in RSC pages and server actions. In server actions,
+  call it outside any `try/catch` (or rethrow), since `redirect()` works by throwing
+- The `mock.module` calls in `lib/auth.test.ts` stay active for later test files in the same run (Bun doesn't undo module
+  mocks). Future tests that need the real `next/headers`/`next/navigation` (unlikely) would have to account for that.
+  The server action tests can mock `next/headers` the same way
+
+Verified:
+- Dev server + Playwright MCP with a throwaway RSC page calling both helpers: signed out → 307 to `/authenticate`
+  (404 for now, since the page is a later task); after sign-up via `/api/auth/sign-up/email` both helpers rendered the user's
+  email; after `/api/auth/sign-out` → redirected again. The probe page and probe user were deleted afterwards
+- build, lint, bun test (91 tests) pass. `test:e2e` still reports "No tests found" (no playwright.config.ts yet)
+
+Next recommended steps:
+- `lib/auth-client.ts` (`createAuthClient` from `better-auth/react`, exporting `signIn`, `signUp`, `signOut`, `useSession`)
+- Then the server actions in `lib/actions/notes.ts` (call `requireAuth()` first, use `session.user.id`)

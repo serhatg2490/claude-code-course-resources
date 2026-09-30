@@ -1,8 +1,28 @@
 import type { Database } from 'bun:sqlite';
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import { APIError } from 'better-auth/api';
-import { createAuth } from './auth';
+import { SIGN_IN_PATH, createAuth, createSessionHelpers } from './auth';
 import { openDb } from './db';
+
+/** Thrown by the mocked `redirect()`, so tests can assert on the target without Next.js internals. */
+class RedirectError extends Error {
+  constructor(readonly url: string) {
+    super(`Redirected to ${url}`);
+  }
+}
+
+// Stand-ins for the Next.js request context: `headers()` returns whatever the test sets here.
+let requestHeaders = new Headers();
+
+mock.module('next/headers', () => ({
+  headers: async () => requestHeaders,
+}));
+
+mock.module('next/navigation', () => ({
+  redirect: (url: string) => {
+    throw new RedirectError(url);
+  },
+}));
 
 type AccountRow = {
   providerId: string;
@@ -23,6 +43,7 @@ let auth: ReturnType<typeof createAuth>;
 beforeEach(() => {
   db = openDb(':memory:');
   auth = createAuth(db);
+  requestHeaders = new Headers();
 });
 
 afterEach(() => {
@@ -157,5 +178,60 @@ describe('sessions', () => {
 
     expect(db.query('SELECT COUNT(*) AS count FROM session').get()).toEqual({ count: 0 });
     expect(db.query('SELECT COUNT(*) AS count FROM account').get()).toEqual({ count: 0 });
+  });
+});
+
+describe('session helpers', () => {
+  let helpers: ReturnType<typeof createSessionHelpers>;
+
+  beforeEach(() => {
+    helpers = createSessionHelpers(auth);
+  });
+
+  /** Signs up, then puts the resulting session cookie on the mocked request. */
+  async function signInRequest() {
+    const response = await auth.api.signUpEmail({ body: credentials, asResponse: true });
+    requestHeaders = cookieHeaderFrom(response);
+  }
+
+  test('getSession() returns the signed-in user for the request cookie', async () => {
+    await signInRequest();
+
+    const session = await helpers.getSession();
+
+    expect(session?.user).toMatchObject({ name: credentials.name, email: credentials.email });
+    expect(session?.session.userId).toBe(session?.user.id);
+  });
+
+  test('getSession() returns null without a session cookie', async () => {
+    expect(await helpers.getSession()).toBeNull();
+  });
+
+  test('getSession() returns null for an unknown session token', async () => {
+    requestHeaders = new Headers({ cookie: 'better-auth.session_token=forged.token' });
+
+    expect(await helpers.getSession()).toBeNull();
+  });
+
+  test('getSession() returns null once the user has signed out', async () => {
+    await signInRequest();
+    await auth.api.signOut({ headers: requestHeaders });
+
+    expect(await helpers.getSession()).toBeNull();
+  });
+
+  test('requireAuth() returns the session when signed in', async () => {
+    await signInRequest();
+
+    const session = await helpers.requireAuth();
+
+    expect(session.user.email).toBe(credentials.email);
+  });
+
+  test('requireAuth() redirects to the sign-in page when signed out', async () => {
+    const error = await helpers.requireAuth().catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(RedirectError);
+    expect(error).toMatchObject({ url: SIGN_IN_PATH });
   });
 });
