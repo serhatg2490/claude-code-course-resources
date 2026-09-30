@@ -551,3 +551,44 @@ Next recommended steps:
 - `toggleShareAction(noteId, isPublic)` (reuse `noteIdSchema`, `NOT_FOUND_ERROR`, `revalidateNote()`. When disabling,
   revalidate the *old* slug too, which `setNotePublic` has already cleared, so read the note first like delete does)
 - Then the auth forms + `/authenticate` page
+
+---
+
+## Task: Create server action for toggling note sharing - 2026-09-30
+
+Completed:
+- `lib/actions/notes.ts`: `toggleShareAction(noteId, isPublic): Promise<ActionResult<Note>>`
+  - `requireAuth()` first (outside try/catch). `noteId` goes through `noteIdSchema`, and `isPublic` through a new
+    `isPublicSchema` (`z.boolean()`), because server action arguments come from the client at runtime
+  - Reads the note with `getNoteById(user.id, id)` first. That's the ownership check, and it gives the slug that disabling
+    is about to clear. Then `setNotePublic(user.id, id, isPublic)`. If that returns `null` (a concurrent delete), the
+    result is "Note not found"
+  - `revalidateNote(note)` (dashboard, `/notes/{id}`, and the current `/p/{slug}`), and when disabling, the old
+    `/p/{slug}` too, so an unshared public page stops being served from cache. A DB error → "Could not update sharing.
+    Please try again." (logged)
+  - Returns the full `Note`, so the ShareToggle can read `isPublic` / `publicSlug` straight from `result.data`
+- `lib/actions/notes.test.ts`: 14 new tests (enable → slug resolves, enable when already shared keeps the slug, disable clears
+  it and the public URL stops resolving, updated_at bumped with title/content/created_at kept, revalidated paths for
+  enable and disable, cross-user enable/disable → not found + untouched, missing / non-UUID id, race between read and update,
+  non-boolean `isPublic` rejected, signed-out redirect, DB failure)
+
+Decisions:
+- The non-boolean `isPublic` test widens the action's parameter type through a method signature (TypeScript checks method
+  parameters bivariantly) rather than with an `as` cast. This is the cast-free way to simulate a tampered payload for a
+  typed primitive argument
+
+Verified:
+- Playwright MCP, dev server, throwaway `'use client'` probe page (deleted afterwards along with the probe users; DB back to
+  0 users/notes/sessions): signed out → redirected to `/authenticate`; signed in → create, enable (21-char slug), enable
+  again (same slug, updated_at bumped), disable (`isPublic: false`, `publicSlug: null`), random UUID → "Note not found"; a
+  second user enabling the first user's note → "Note not found" and the DB row stayed private. No server errors
+- build, lint, bun test (148 tests) pass. `test:e2e` still reports "No tests found" (no playwright.config.ts yet)
+
+Notes for next tasks:
+- All four server actions are done. ShareToggle: `const r = await toggleShareAction(note.id, !isPublic)`, then read
+  `r.data.publicSlug` for the URL (`${location.origin}/p/${slug}`). Like the editor, treat the note props as initial values
+
+Next recommended steps:
+- The auth UI: `components/SignUpForm.tsx`, `components/LoginForm.tsx`, then `app/authenticate/page.tsx` (redirect to
+  `/dashboard` on success). Right now `requireAuth()` redirects to a 404
+- Then the Header/LogoutButton, and the dashboard

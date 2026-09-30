@@ -8,6 +8,7 @@ import {
   createNote,
   deleteNote,
   getNoteById,
+  setNotePublic,
   updateNote,
   type Note,
 } from '../notes';
@@ -52,6 +53,8 @@ const contentJsonSchema = z
 
 /** Note ids come from `crypto.randomUUID()`, so anything else can't match a note. */
 const noteIdSchema = z.uuid(NOT_FOUND_ERROR);
+
+const isPublicSchema = z.boolean('Sharing must be turned on or off');
 
 // Strict, so a client can't slip in fields like `userId`: the owner always comes from the session.
 const noteFieldsSchema = z.strictObject({
@@ -158,6 +161,52 @@ export async function deleteNoteAction(noteId: string): Promise<ActionResult<nul
 
   revalidateNote(note);
   return { success: true, data: null };
+}
+
+/**
+ * Turns public sharing on or off for a note owned by the signed-in user. Enabling keeps an existing slug or
+ * generates one; disabling clears it, so the old public URL returns 404. Returns the note with its `publicSlug`.
+ * Returns "Note not found" for missing notes and for notes owned by someone else alike.
+ * Redirects to the sign-in page when there is no session.
+ */
+export async function toggleShareAction(
+  noteId: string,
+  isPublic: boolean,
+): Promise<ActionResult<Note>> {
+  const { user } = await requireAuth();
+
+  const parsedId = noteIdSchema.safeParse(noteId);
+  if (!parsedId.success) {
+    return invalidInput(parsedId.error);
+  }
+  const parsedIsPublic = isPublicSchema.safeParse(isPublic);
+  if (!parsedIsPublic.success) {
+    return invalidInput(parsedIsPublic.error);
+  }
+
+  let previous: Note | null;
+  let note: Note | null = null;
+  try {
+    // Read first (scoped by user id, so this is the ownership check) to know the slug that disabling clears.
+    previous = await getNoteById(user.id, parsedId.data);
+    if (previous) {
+      // Null if the note was deleted by a concurrent request in between.
+      note = await setNotePublic(user.id, previous.id, parsedIsPublic.data);
+    }
+  } catch (error) {
+    console.error('Failed to update note sharing', error);
+    return { success: false, error: 'Could not update sharing. Please try again.' };
+  }
+  if (!previous || !note) {
+    return { success: false, error: NOT_FOUND_ERROR };
+  }
+
+  revalidateNote(note);
+  if (previous.publicSlug && previous.publicSlug !== note.publicSlug) {
+    // The note is no longer public: stop serving the old public page from cache.
+    revalidatePath(`/p/${previous.publicSlug}`);
+  }
+  return { success: true, data: note };
 }
 
 /**

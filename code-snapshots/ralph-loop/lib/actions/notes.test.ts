@@ -14,7 +14,8 @@ import {
   setNotePublic,
   type Note,
 } from '../notes';
-import { createNoteAction, deleteNoteAction, updateNoteAction } from './notes';
+import { createNoteAction, deleteNoteAction, toggleShareAction, updateNoteAction } from './notes';
+import type { ActionResult } from './result';
 
 // Spies (restored after each test) rather than `mock.module`, which would leak into later test files
 // that import the real `lib/auth.ts`.
@@ -485,6 +486,175 @@ describe('deleteNoteAction', () => {
     expect(result).toEqual({
       success: false,
       error: 'Could not delete the note. Please try again.',
+    });
+    expect(consoleError).toHaveBeenCalledTimes(1);
+    expect(await getNoteById('user-1', note.id)).toEqual(note);
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+});
+
+describe('toggleShareAction', () => {
+  const OLD_TIMESTAMP = '2020-01-01 00:00:00';
+
+  /** A note owned by `userId` with an old `updated_at`, so a bump is visible despite 1-second resolution. */
+  async function seedNote(userId: string, { shared = false } = {}): Promise<Note> {
+    const created = await createNote(userId, { title: 'Original' });
+    const note = shared ? await setNotePublic(userId, created.id, true) : created;
+    run('UPDATE notes SET updated_at = ? WHERE id = ?', [OLD_TIMESTAMP, created.id]);
+    return { ...(note ?? created), updatedAt: OLD_TIMESTAMP };
+  }
+
+  test('enables sharing with a new public slug that resolves the note', async () => {
+    const note = await seedNote('user-1');
+    signInAs('user-1');
+
+    const result = await toggleShareAction(note.id, true);
+
+    expect(result).toMatchObject({ success: true, data: { id: note.id, isPublic: true } });
+    const slug = result.success ? result.data.publicSlug : null;
+    expect(slug).toEqual(expect.any(String));
+    expect(await getNoteByPublicSlug(slug ?? '')).toEqual(result.success ? result.data : null);
+  });
+
+  test('keeps the existing slug when the note is already shared', async () => {
+    const note = await seedNote('user-1', { shared: true });
+    signInAs('user-1');
+
+    const result = await toggleShareAction(note.id, true);
+
+    expect(result).toMatchObject({
+      success: true,
+      data: { isPublic: true, publicSlug: note.publicSlug },
+    });
+  });
+
+  test('disables sharing and clears the slug, so the public URL stops resolving', async () => {
+    const note = await seedNote('user-1', { shared: true });
+    signInAs('user-1');
+
+    const result = await toggleShareAction(note.id, false);
+
+    expect(result).toMatchObject({ success: true, data: { isPublic: false, publicSlug: null } });
+    expect(await getNoteByPublicSlug(note.publicSlug ?? '')).toBeNull();
+  });
+
+  test('bumps updated_at and leaves the title and content alone', async () => {
+    const note = await seedNote('user-1');
+    signInAs('user-1');
+
+    await toggleShareAction(note.id, true);
+
+    const updated = await getNoteById('user-1', note.id);
+    expect(updated?.updatedAt).not.toBe(OLD_TIMESTAMP);
+    expect(updated).toMatchObject({
+      title: note.title,
+      contentJson: note.contentJson,
+      createdAt: note.createdAt,
+    });
+  });
+
+  test('revalidates the dashboard, the note page and the new public page when enabling', async () => {
+    const note = await seedNote('user-1');
+    signInAs('user-1');
+
+    const result = await toggleShareAction(note.id, true);
+
+    const slug = result.success ? result.data.publicSlug : null;
+    expect(revalidatePath.mock.calls).toEqual([
+      ['/dashboard'],
+      [`/notes/${note.id}`],
+      [`/p/${slug}`],
+    ]);
+  });
+
+  test('revalidates the old public page when disabling', async () => {
+    const note = await seedNote('user-1', { shared: true });
+    signInAs('user-1');
+
+    await toggleShareAction(note.id, false);
+
+    expect(revalidatePath.mock.calls).toEqual([
+      ['/dashboard'],
+      [`/notes/${note.id}`],
+      [`/p/${note.publicSlug}`],
+    ]);
+  });
+
+  test.each([true, false])(
+    'returns "Note not found" for another user’s note and leaves it untouched (isPublic: %p)',
+    async (isPublic) => {
+      const note = await seedNote('user-2', { shared: !isPublic });
+      signInAs('user-1');
+
+      const result = await toggleShareAction(note.id, isPublic);
+
+      expect(result).toEqual({ success: false, error: 'Note not found' });
+      expect(await getNoteById('user-2', note.id)).toEqual(note);
+      expect(revalidatePath).not.toHaveBeenCalled();
+    },
+  );
+
+  test.each([
+    ['a missing note', crypto.randomUUID()],
+    ['an id that is not a UUID', 'not-a-note-id'],
+  ])('returns "Note not found" for %s', async (_case, noteId) => {
+    signInAs('user-1');
+
+    const result = await toggleShareAction(noteId, true);
+
+    expect(result).toEqual({ success: false, error: 'Note not found' });
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  test('returns "Note not found" when the note disappears between the read and the update', async () => {
+    const note = await seedNote('user-1');
+    signInAs('user-1');
+    spyOn(notesModule, 'setNotePublic').mockResolvedValue(null);
+
+    const result = await toggleShareAction(note.id, true);
+
+    expect(result).toEqual({ success: false, error: 'Note not found' });
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  test('rejects a non-boolean isPublic without changing the note', async () => {
+    const note = await seedNote('user-1');
+    signInAs('user-1');
+    // Simulates a tampered request: at runtime a client can send any payload. Method parameters are checked
+    // bivariantly, so this widens the parameter type without a cast.
+    const untyped: {
+      call(noteId: string, isPublic: unknown): Promise<ActionResult<Note>>;
+    } = { call: toggleShareAction };
+
+    const result = await untyped.call(note.id, 'true');
+
+    expect(result).toEqual({ success: false, error: 'Sharing must be turned on or off' });
+    expect(await getNoteById('user-1', note.id)).toEqual(note);
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  test('redirects to the sign-in page when signed out, without changing the note', async () => {
+    const note = await seedNote('user-1');
+    signOut();
+
+    await expect(toggleShareAction(note.id, true)).rejects.toThrow(new RedirectError(SIGN_IN_PATH));
+    expect(await getNoteById('user-1', note.id)).toEqual(note);
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  test('returns a friendly error when the database write fails', async () => {
+    const note = await seedNote('user-1');
+    signInAs('user-1');
+    spyOn(notesModule, 'setNotePublic').mockRejectedValue(
+      new Error('SQLITE_BUSY: database is locked'),
+    );
+    const consoleError = spyOn(console, 'error').mockImplementation(() => {});
+
+    const result = await toggleShareAction(note.id, true);
+
+    expect(result).toEqual({
+      success: false,
+      error: 'Could not update sharing. Please try again.',
     });
     expect(consoleError).toHaveBeenCalledTimes(1);
     expect(await getNoteById('user-1', note.id)).toEqual(note);
