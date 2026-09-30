@@ -109,3 +109,33 @@ Next recommended steps:
 - `lib/notes.ts`: Note type, row → Note mapper, `generatePublicSlug()` (nanoid, 16+ chars),
   empty TipTap doc constant, then the repository functions
 - Or `lib/auth.ts`: better-auth can take the `getDb()` Bun Database instance directly (check docs via Context7)
+
+---
+
+## Task: Define Note type and create helper functions (lib/notes.ts) - 2026-09-30
+
+Completed:
+- `lib/notes.ts`:
+  - `Note` type (camelCase, as in SPEC.MD §6.2) and `NoteRow` (the raw snake_case `notes` row,
+    `is_public` as an integer)
+  - `toNote(row)`: row → Note mapper (`is_public === 1` → boolean)
+  - `generatePublicSlug()`: `nanoid(PUBLIC_SLUG_LENGTH)` with 21 URL-safe chars (~126 bits)
+  - `DEFAULT_NOTE_TITLE` ('Untitled note') and `EMPTY_DOC_JSON`, a stringified
+    `{ type: 'doc', content: [{ type: 'paragraph' }] }`, which is what TipTap's `getJSON()` returns for an
+    empty editor. Typed with `satisfies JSONContent` (a type-only import from `@tiptap/react`, so no
+    runtime cost on the server)
+- `lib/notes.test.ts`: 7 bun tests (constants, slug length/charset/uniqueness, mapping including a real
+  row read back from the in-memory DB)
+
+Verified:
+- bun test (33 tests), lint, build, and `tsc --noEmit` all pass. No UI changes, so no Playwright check
+- `test:e2e` still reports "No tests found" (no playwright.config.ts yet)
+
+Notes for next tasks:
+- Repository functions should `get<NoteRow>()` / `query<NoteRow>()` and map with `toNote()`
+- Store `EMPTY_DOC_JSON` directly as `content_json`; it's already a string
+- Set `updated_at = datetime('now')` in SQL on updates (keeps the SQLite timestamp format)
+
+Next recommended steps:
+- `createNote` (id via `crypto.randomUUID()`, defaults from the constants above), then the
+  get/update/delete/share functions in the same file
