@@ -1,3 +1,4 @@
 [test]
 # Exclude e2e tests (these use Playwright, not bun test)
 ignore = ["e2e/**"]
+preload = ["./scripts/test-setup.ts"]

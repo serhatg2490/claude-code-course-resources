@@ -283,3 +283,44 @@ Next recommended steps:
 - The repository is complete. Next come the auth tasks: `lib/auth.ts` (better-auth with the `getDb()` Bun Database;
   check the adapter via Context7, since `better-sqlite3` is also installed), then `app/api/auth/[...all]/route.ts`,
   then the `getSession()` / `requireAuth()` helpers
+
+---
+
+## Task: Configure better-auth server (lib/auth.ts) - 2026-09-30
+
+Completed:
+- `lib/auth.ts`:
+  - `createAuth(database)`: `betterAuth()` on a Bun SQLite `Database`. better-auth 1.4.16 detects `bun:sqlite` itself
+    (via `fileControl`) and uses its built-in `BunSqliteDialect`, so no adapter package, no `better-sqlite3`, and no
+    better-auth migrations: the tables come from `lib/schema.ts`
+  - Email/password enabled (min 8 / max 128 chars, `autoSignIn: true` so sign-up yields a session right away)
+  - Session: 7-day expiry, refreshed at most once a day (`updateAge`). No cookie cache, so sign-out/revocation takes
+    effect immediately and each session check is a single indexed SQLite lookup
+  - `nextCookies()` plugin (last in the list) so `auth.api.*` calls in server actions can set cookies
+  - `export const auth = createAuth(getDb())` and `export type Session = typeof auth.$Infer.Session`
+- `.env.example` (committed via a `!.env.example` exception in .gitignore): `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`,
+  optional `DATABASE_PATH`. A local `.env` with a generated secret was created (gitignored)
+- `scripts/test-setup.ts` preloaded by `bun test` (bunfig.toml): defaults `DATABASE_PATH` to `:memory:`, because importing
+  `lib/auth.ts` opens the shared connection at module load and tests must never touch `data/app.db`
+- `lib/auth.test.ts`: 11 tests running real better-auth flows against `openDb(':memory:')`: sign-up (user + credential
+  account with a hashed password, autoSignIn session, duplicate email, short password), sign-in (ok, wrong password, unknown
+  email), sessions (cookie → user, 7-day expiry, no cookie → null, sign-out revokes, user delete cascades)
+
+Verified:
+- In the Next.js dev server (Turbopack, `bun --bun`), a throwaway RSC page importing `@/lib/auth` loaded fine, read the secret and
+  base URL from `.env`, and resolved a real session cookie (created against `data/app.db`) to the right user. The page and the probe
+  user were deleted afterwards
+- build, lint, tsc, bun test (85 tests) pass. `test:e2e` still reports "No tests found" (no playwright.config.ts yet)
+
+Notes for next tasks:
+- better-auth stores its timestamps as ISO-8601 strings (`2026-09-30T12:19:16.727Z`) and booleans as 0/1. The notes table keeps
+  SQLite's `datetime('now')` format. Don't compare across the two
+- better-auth throws at request time in production (`bun run start`, and Playwright's webServer if it uses a production build) when
+  `BETTER_AUTH_SECRET` is missing. `next build` is fine without it
+- The Kysely dialect serializes access with a mutex on the shared connection, and `auth` must not be `destroy()`ed (that would close
+  `getDb()`)
+- Only import `lib/auth.ts` from server code (it pulls in bun:sqlite). The client belongs in `lib/auth-client.ts`
+
+Next recommended steps:
+- `app/api/auth/[...all]/route.ts` with `toNextJsHandler(auth)` from `better-auth/next-js` (check its export via Context7)
+- Then `getSession()` / `requireAuth()` in lib/auth.ts (`auth.api.getSession({ headers: await headers() })`, `redirect('/authenticate')`)
