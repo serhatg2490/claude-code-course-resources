@@ -8,7 +8,9 @@ import {
   deleteNote,
   generatePublicSlug,
   getNoteById,
+  getNoteByPublicSlug,
   getNotesByUser,
+  setNotePublic,
   toNote,
   updateNote,
   type NoteRow,
@@ -372,5 +374,126 @@ describe('deleteNote', () => {
     expect(
       get<NoteRow>("SELECT * FROM notes WHERE public_slug = 'abcdefghijklmnopqrstu'"),
     ).toBeUndefined();
+  });
+});
+
+describe('sharing', () => {
+  const SEEDED_AT = '2026-01-01 10:00:00';
+  const SLUG_PATTERN = new RegExp(`^[A-Za-z0-9_-]{${PUBLIC_SLUG_LENGTH}}$`);
+
+  beforeEach(() => {
+    run("INSERT INTO user (id, name, email) VALUES ('user-1', 'Ada', 'ada@example.com')");
+    run("INSERT INTO user (id, name, email) VALUES ('user-2', 'Grace', 'grace@example.com')");
+    // Old explicit timestamps, so the `updated_at` bump is observable without sleeping.
+    run(
+      'INSERT INTO notes (id, user_id, title, content_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+      ['note-1', 'user-1', 'Shareable', EMPTY_DOC_JSON, SEEDED_AT, SEEDED_AT],
+    );
+  });
+
+  describe('setNotePublic', () => {
+    test('enabling makes the note public with a fresh slug', async () => {
+      const note = await setNotePublic('user-1', 'note-1', true);
+
+      expect(note?.isPublic).toBe(true);
+      expect(note?.publicSlug).toMatch(SLUG_PATTERN);
+      expect(await getNoteById('user-1', 'note-1')).toEqual(note);
+    });
+
+    test('enabling an already public note keeps its slug', async () => {
+      const first = await setNotePublic('user-1', 'note-1', true);
+      const second = await setNotePublic('user-1', 'note-1', true);
+
+      expect(second?.publicSlug).toBe(first?.publicSlug ?? 'missing');
+    });
+
+    test('disabling makes the note private and clears the slug', async () => {
+      await setNotePublic('user-1', 'note-1', true);
+
+      const note = await setNotePublic('user-1', 'note-1', false);
+
+      expect(note).toMatchObject({ isPublic: false, publicSlug: null });
+    });
+
+    test('re-enabling after disabling generates a new slug', async () => {
+      const first = await setNotePublic('user-1', 'note-1', true);
+      await setNotePublic('user-1', 'note-1', false);
+      const second = await setNotePublic('user-1', 'note-1', true);
+
+      expect(second?.publicSlug).toMatch(SLUG_PATTERN);
+      expect(second?.publicSlug).not.toBe(first?.publicSlug ?? null);
+    });
+
+    test('gives different notes different slugs', async () => {
+      const other = await createNote('user-1');
+
+      const first = await setNotePublic('user-1', 'note-1', true);
+      const second = await setNotePublic('user-1', other.id, true);
+
+      expect(second?.publicSlug).not.toBe(first?.publicSlug ?? null);
+    });
+
+    test('bumps updated_at and leaves title and content alone', async () => {
+      const note = await setNotePublic('user-1', 'note-1', true);
+
+      expect(note).toMatchObject({
+        title: 'Shareable',
+        contentJson: EMPTY_DOC_JSON,
+        createdAt: SEEDED_AT,
+      });
+      expect(note && note.updatedAt > SEEDED_AT).toBe(true);
+    });
+
+    test("returns null and leaves another user's note private", async () => {
+      expect(await setNotePublic('user-2', 'note-1', true)).toBeNull();
+
+      expect(await getNoteById('user-1', 'note-1')).toMatchObject({
+        isPublic: false,
+        publicSlug: null,
+        updatedAt: SEEDED_AT,
+      });
+    });
+
+    test("cannot unshare another user's note", async () => {
+      const shared = await setNotePublic('user-1', 'note-1', true);
+
+      expect(await setNotePublic('user-2', 'note-1', false)).toBeNull();
+      expect(await getNoteById('user-1', 'note-1')).toEqual(shared);
+    });
+
+    test('returns null for a note that does not exist', async () => {
+      expect(await setNotePublic('user-1', 'missing', true)).toBeNull();
+    });
+  });
+
+  describe('getNoteByPublicSlug', () => {
+    test('returns a shared note by its slug', async () => {
+      const shared = await setNotePublic('user-1', 'note-1', true);
+      expect(shared?.publicSlug).toMatch(SLUG_PATTERN);
+      if (!shared?.publicSlug) return;
+
+      expect(await getNoteByPublicSlug(shared.publicSlug)).toEqual(shared);
+    });
+
+    test('returns null for an unknown slug', async () => {
+      expect(await getNoteByPublicSlug('doesnotexist123456789')).toBeNull();
+    });
+
+    test('returns null once sharing is disabled', async () => {
+      const shared = await setNotePublic('user-1', 'note-1', true);
+      await setNotePublic('user-1', 'note-1', false);
+      expect(shared?.publicSlug).toMatch(SLUG_PATTERN);
+      if (!shared?.publicSlug) return;
+
+      expect(await getNoteByPublicSlug(shared.publicSlug)).toBeNull();
+    });
+
+    test('returns null when a slug exists but is_public = 0', async () => {
+      run(
+        "UPDATE notes SET is_public = 0, public_slug = 'abcdefghijklmnopqrstu' WHERE id = 'note-1'",
+      );
+
+      expect(await getNoteByPublicSlug('abcdefghijklmnopqrstu')).toBeNull();
+    });
   });
 });

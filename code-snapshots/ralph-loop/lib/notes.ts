@@ -162,3 +162,41 @@ export async function deleteNote(userId: string, noteId: string): Promise<boolea
   const { changes } = run('DELETE FROM notes WHERE id = ? AND user_id = ?', [noteId, userId]);
   return changes > 0;
 }
+
+/**
+ * Turns public sharing on or off for a note owned by `userId` and bumps `updated_at`.
+ * Enabling keeps the note's existing slug (so a shared URL stays stable) or generates one; disabling
+ * clears the slug, so re-enabling later yields a new URL and the old one stops working for good.
+ * Returns the updated note, or `null` when it doesn't exist or belongs to someone else.
+ */
+export async function setNotePublic(
+  userId: string,
+  noteId: string,
+  isPublic: boolean,
+): Promise<Note | null> {
+  const row = get<NoteRow>(
+    `UPDATE notes
+     SET is_public = $isPublic,
+         public_slug = CASE WHEN $isPublic = 1 THEN COALESCE(public_slug, $slug) ELSE NULL END,
+         updated_at = datetime('now')
+     WHERE id = $noteId AND user_id = $userId
+     RETURNING *`,
+    {
+      isPublic: isPublic ? 1 : 0,
+      slug: isPublic ? generatePublicSlug() : null,
+      noteId,
+      userId,
+    },
+  );
+  return row ? toNote(row) : null;
+}
+
+/**
+ * Returns the shared note with `slug`, or `null` when no note has that slug or sharing is off.
+ * Not scoped to a user: this backs the anonymous `/p/{slug}` page. The returned note still includes
+ * owner fields, so callers should expose only what the public page needs (title and content).
+ */
+export async function getNoteByPublicSlug(slug: string): Promise<Note | null> {
+  const row = get<NoteRow>('SELECT * FROM notes WHERE public_slug = ? AND is_public = 1', [slug]);
+  return row ? toNote(row) : null;
+}

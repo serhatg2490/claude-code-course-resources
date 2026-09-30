@@ -249,3 +249,37 @@ Next recommended steps:
   disabling → `is_public = 0, public_slug = NULL`, both bump `updated_at`, `WHERE id AND user_id RETURNING *`
 - `getNoteByPublicSlug(slug)`: `WHERE public_slug = ? AND is_public = 1`
 - Then the auth tasks (lib/auth.ts with better-auth on the `getDb()` Bun Database)
+
+---
+
+## Task: Implement note sharing functions - 2026-09-30
+
+Completed:
+- `lib/notes.ts`:
+  - `setNotePublic(userId, noteId, isPublic)`: a single `UPDATE ... RETURNING *` scoped by `id AND user_id`.
+    Enabling sets `is_public = 1, public_slug = COALESCE(public_slug, $slug)`; disabling sets `is_public = 0,
+    public_slug = NULL`. Both bump `updated_at`. Returns `null` for missing/foreign notes
+  - `getNoteByPublicSlug(slug)`: `WHERE public_slug = ? AND is_public = 1` (not user-scoped, it backs `/p/{slug}`)
+- `lib/notes.test.ts`: 13 new tests (enable → slug, idempotent enable keeps slug, disable clears slug,
+  re-enable → new slug, distinct slugs per note, updated_at bump, cross-user enable/disable → null and untouched,
+  missing → null; lookup by slug, unknown slug, after disabling, slug present but is_public = 0)
+
+Decisions:
+- Enabling an already public note keeps its slug, so a URL that's already been shared stays valid (SPEC.MD §7.2
+  "generate only if none exists"). Disabling clears the slug, so an unshared URL never works again, even after
+  re-sharing
+- A slug is generated in JS on every enable call and discarded by `COALESCE` when one already exists. That's cheaper
+  and simpler than a read-then-write, and the call stays atomic
+- Toggling sharing bumps `updated_at` ("update timestamps on every modification"), so the note moves to the top of
+  the dashboard list
+- `getNoteByPublicSlug` returns a full `Note` (the SPEC signature), which includes `userId`. The `/p/[slug]` page must
+  pass only `title` and `contentJson` to the client viewer
+
+Verified:
+- bun test (74 tests), lint and build pass. No UI changes, so no Playwright check
+- `test:e2e` still reports "No tests found" (no playwright.config.ts yet)
+
+Next recommended steps:
+- The repository is complete. Next come the auth tasks: `lib/auth.ts` (better-auth with the `getDb()` Bun Database;
+  check the adapter via Context7, since `better-sqlite3` is also installed), then `app/api/auth/[...all]/route.ts`,
+  then the `getSession()` / `requireAuth()` helpers
