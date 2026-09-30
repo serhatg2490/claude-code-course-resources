@@ -1,6 +1,6 @@
 import type { JSONContent } from '@tiptap/react';
 import { nanoid } from 'nanoid';
-import { get } from './db';
+import { get, query } from './db';
 
 /**
  * A note as used throughout the app (see SPEC.MD §6.2).
@@ -94,4 +94,24 @@ export async function createNote(userId: string, data: CreateNoteData = {}): Pro
   }
 
   return toNote(row);
+}
+
+/**
+ * Returns the note with `noteId` if `userId` owns it, or `null` when it doesn't exist or belongs to
+ * someone else. The two cases are indistinguishable on purpose, so callers can't probe other users' ids.
+ */
+export async function getNoteById(userId: string, noteId: string): Promise<Note | null> {
+  const row = get<NoteRow>('SELECT * FROM notes WHERE id = ? AND user_id = ?', [noteId, userId]);
+  return row ? toNote(row) : null;
+}
+
+/**
+ * Returns every note owned by `userId`, most recently updated first.
+ */
+export async function getNotesByUser(userId: string): Promise<Note[]> {
+  const rows = query<NoteRow>(
+    'SELECT * FROM notes WHERE user_id = ? ORDER BY updated_at DESC, created_at DESC',
+    [userId],
+  );
+  return rows.map(toNote);
 }

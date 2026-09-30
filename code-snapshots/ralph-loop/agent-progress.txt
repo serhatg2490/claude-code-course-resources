@@ -168,3 +168,30 @@ Next recommended steps:
   update/delete/share using `RETURNING *` the same way
 - Note: `datetime('now')` has 1-second resolution, so tests of `updated_at` ordering/changes should seed
   rows with explicit timestamps rather than sleeping
+
+---
+
+## Task: Implement getNoteById and getNotesByUser functions - 2026-09-30
+
+Completed:
+- `lib/notes.ts`:
+  - `getNoteById(userId, noteId)`: `SELECT * ... WHERE id = ? AND user_id = ?`, returns `null` both when the
+    note doesn't exist and when another user owns it (so ids of other users' notes can't be probed)
+  - `getNotesByUser(userId)`: `WHERE user_id = ? ORDER BY updated_at DESC, created_at DESC`, mapped with `toNote()`
+- `lib/notes.test.ts`: 8 new tests (owner read, cross-user read → null, missing → null, empty list, only own
+  notes returned, updated_at ordering, created_at tie-break, camelCase mapping). Ordering tests seed rows
+  with explicit timestamps
+
+Decisions:
+- Added `created_at DESC` as a tie-breaker so the order is deterministic when several notes share the same
+  1-second `updated_at` (e.g. created in quick succession)
+- The list returns full Notes, including `contentJson`. Fine for now. If the dashboard gets slow, add a
+  summary query that leaves out `content_json` (SPEC.MD §7.2 marks this as optional)
+
+Verified:
+- bun test (46 tests), lint and build pass. No UI changes, so no Playwright check
+- `test:e2e` still reports "No tests found" (no playwright.config.ts yet)
+
+Next recommended steps:
+- `updateNote` (dynamic SET for the provided fields + `updated_at = datetime('now')`,
+  `WHERE id = ? AND user_id = ? RETURNING *`), then `deleteNote` and the sharing functions

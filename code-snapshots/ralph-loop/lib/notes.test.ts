@@ -6,6 +6,8 @@ import {
   PUBLIC_SLUG_LENGTH,
   createNote,
   generatePublicSlug,
+  getNoteById,
+  getNotesByUser,
   toNote,
   type NoteRow,
 } from './notes';
@@ -159,5 +161,80 @@ describe('createNote', () => {
 
   test('rejects a user that does not exist', async () => {
     await expect(createNote('ghost')).rejects.toThrow(/FOREIGN KEY/);
+  });
+});
+
+describe('reading notes', () => {
+  beforeEach(() => {
+    run("INSERT INTO user (id, name, email) VALUES ('user-1', 'Ada', 'ada@example.com')");
+    run("INSERT INTO user (id, name, email) VALUES ('user-2', 'Grace', 'grace@example.com')");
+  });
+
+  /** Seeds a note with explicit timestamps, since `datetime('now')` only has 1-second resolution. */
+  function seedNote(id: string, userId: string, createdAt: string, updatedAt: string): void {
+    run(
+      'INSERT INTO notes (id, user_id, title, content_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+      [id, userId, `Note ${id}`, EMPTY_DOC_JSON, createdAt, updatedAt],
+    );
+  }
+
+  describe('getNoteById', () => {
+    test("returns the owner's note", async () => {
+      const created = await createNote('user-1', { title: 'Mine' });
+
+      expect(await getNoteById('user-1', created.id)).toEqual(created);
+    });
+
+    test('returns null for a note owned by another user', async () => {
+      const created = await createNote('user-1', { title: 'Private' });
+
+      expect(await getNoteById('user-2', created.id)).toBeNull();
+    });
+
+    test('returns null for a note that does not exist', async () => {
+      expect(await getNoteById('user-1', 'missing')).toBeNull();
+    });
+  });
+
+  describe('getNotesByUser', () => {
+    test('returns an empty list for a user without notes', async () => {
+      expect(await getNotesByUser('user-1')).toEqual([]);
+    });
+
+    test("returns only the user's own notes", async () => {
+      seedNote('a', 'user-1', '2026-01-01 10:00:00', '2026-01-01 10:00:00');
+      seedNote('b', 'user-2', '2026-01-01 10:00:00', '2026-01-01 10:00:00');
+      seedNote('c', 'user-1', '2026-01-01 10:00:00', '2026-01-01 10:00:00');
+
+      const notes = await getNotesByUser('user-1');
+
+      expect(notes.map((note) => note.id).sort()).toEqual(['a', 'c']);
+      expect(notes.every((note) => note.userId === 'user-1')).toBe(true);
+    });
+
+    test('orders notes by updated_at, most recent first', async () => {
+      seedNote('old', 'user-1', '2026-01-01 10:00:00', '2026-01-01 10:00:00');
+      seedNote('edited', 'user-1', '2026-01-01 09:00:00', '2026-03-01 12:00:00');
+      seedNote('new', 'user-1', '2026-02-01 10:00:00', '2026-02-01 10:00:00');
+
+      const notes = await getNotesByUser('user-1');
+
+      expect(notes.map((note) => note.id)).toEqual(['edited', 'new', 'old']);
+    });
+
+    test('breaks updated_at ties by created_at, most recent first', async () => {
+      seedNote('first', 'user-1', '2026-01-01 10:00:00', '2026-05-01 10:00:00');
+      seedNote('second', 'user-1', '2026-01-02 10:00:00', '2026-05-01 10:00:00');
+
+      const notes = await getNotesByUser('user-1');
+
+      expect(notes.map((note) => note.id)).toEqual(['second', 'first']);
+    });
+
+    test('maps rows to camelCase Notes', async () => {
+      const created = await createNote('user-1', { title: 'Mapped' });
+
+      expect(await getNotesByUser('user-1')).toEqual([created]);
+    });
   });
 });
