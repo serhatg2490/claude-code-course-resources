@@ -4,6 +4,7 @@ import {
   DEFAULT_NOTE_TITLE,
   EMPTY_DOC_JSON,
   PUBLIC_SLUG_LENGTH,
+  createNote,
   generatePublicSlug,
   toNote,
   type NoteRow,
@@ -100,5 +101,63 @@ describe('toNote', () => {
     });
     expect(note.createdAt).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
     expect(note.updatedAt).toBe(note.createdAt);
+  });
+});
+
+describe('createNote', () => {
+  beforeEach(() => {
+    run("INSERT INTO user (id, name, email) VALUES ('user-1', 'Ada', 'ada@example.com')");
+  });
+
+  test('creates an untitled note with an empty document by default', async () => {
+    const note = await createNote('user-1');
+
+    expect(note).toMatchObject({
+      userId: 'user-1',
+      title: DEFAULT_NOTE_TITLE,
+      contentJson: EMPTY_DOC_JSON,
+      isPublic: false,
+      publicSlug: null,
+    });
+    expect(note.createdAt).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
+    expect(note.updatedAt).toBe(note.createdAt);
+  });
+
+  test('uses the provided title and content', async () => {
+    const contentJson = JSON.stringify({
+      type: 'doc',
+      content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Hello' }] }],
+    });
+
+    const note = await createNote('user-1', { title: 'Groceries', contentJson });
+
+    expect(note.title).toBe('Groceries');
+    expect(note.contentJson).toBe(contentJson);
+  });
+
+  test('persists the note under the owning user', async () => {
+    const note = await createNote('user-1', { title: 'Stored' });
+
+    const stored = get<NoteRow>('SELECT * FROM notes WHERE id = ? AND user_id = ?', [
+      note.id,
+      'user-1',
+    ]);
+    expect(stored).toBeDefined();
+    if (!stored) return;
+    expect(toNote(stored)).toEqual(note);
+  });
+
+  test('generates a unique UUID for every note', async () => {
+    const first = await createNote('user-1');
+    const second = await createNote('user-1');
+
+    expect(first.id).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+    );
+    expect(second.id).not.toBe(first.id);
+  });
+
+  test('rejects a user that does not exist', async () => {
+    await expect(createNote('ghost')).rejects.toThrow(/FOREIGN KEY/);
   });
 });

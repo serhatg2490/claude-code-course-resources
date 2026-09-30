@@ -1,5 +1,6 @@
 import type { JSONContent } from '@tiptap/react';
 import { nanoid } from 'nanoid';
+import { get } from './db';
 
 /**
  * A note as used throughout the app (see SPEC.MD §6.2).
@@ -66,4 +67,31 @@ export function toNote(row: NoteRow): Note {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
+}
+
+export type CreateNoteData = {
+  title?: string;
+  /** Stringified TipTap document. */
+  contentJson?: string;
+};
+
+/**
+ * Creates a note owned by `userId`, defaulting to an untitled note with an empty document.
+ */
+export async function createNote(userId: string, data: CreateNoteData = {}): Promise<Note> {
+  const row = get<NoteRow>(
+    'INSERT INTO notes (id, user_id, title, content_json) VALUES (?, ?, ?, ?) RETURNING *',
+    [
+      crypto.randomUUID(),
+      userId,
+      data.title ?? DEFAULT_NOTE_TITLE,
+      data.contentJson ?? EMPTY_DOC_JSON,
+    ],
+  );
+
+  if (!row) {
+    throw new Error('Failed to create note');
+  }
+
+  return toNote(row);
 }

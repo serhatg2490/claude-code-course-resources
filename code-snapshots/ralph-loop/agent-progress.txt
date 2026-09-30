@@ -139,3 +139,32 @@ Notes for next tasks:
 Next recommended steps:
 - `createNote` (id via `crypto.randomUUID()`, defaults from the constants above), then the
   get/update/delete/share functions in the same file
+
+---
+
+## Task: Implement createNote repository function - 2026-09-30
+
+Completed:
+- `lib/notes.ts`: `CreateNoteData` type and `async createNote(userId, data = {})`
+  - id via `crypto.randomUUID()`; `title ?? DEFAULT_NOTE_TITLE`, `contentJson ?? EMPTY_DOC_JSON`
+  - a single `INSERT ... RETURNING *` through `get<NoteRow>()`, mapped with `toNote()`, so the returned
+    Note has the DB-generated `created_at`/`updated_at` without a second query
+  - throws if no row comes back (shouldn't happen, but it avoids a cast/non-null assertion)
+- `lib/notes.test.ts`: 5 new tests (defaults, provided title/content, persisted under the owner,
+  unique UUIDs, unknown user rejected by the FOREIGN KEY)
+
+Decisions:
+- Defaults use `??`, so an empty-string title is stored as-is. Trimming/rejecting blank titles belongs
+  in the server action's Zod schema, not the repository
+- `lib/notes.ts` now imports `lib/db.ts` (bun:sqlite), so it is server-only. Client components must not
+  import values from it; `import type { Note }` is fine
+
+Verified:
+- bun test (38 tests), lint and build pass. No UI changes, so no Playwright check
+- `test:e2e` still reports "No tests found" (no playwright.config.ts yet)
+
+Next recommended steps:
+- `getNoteById` / `getNotesByUser` (`WHERE id = ? AND user_id = ?`, `ORDER BY updated_at DESC`), then
+  update/delete/share using `RETURNING *` the same way
+- Note: `datetime('now')` has 1-second resolution, so tests of `updated_at` ordering/changes should seed
+  rows with explicit timestamps rather than sleeping
