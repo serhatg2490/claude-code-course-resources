@@ -470,3 +470,45 @@ Next recommended steps:
 - `updateNoteAction(noteId, data)`, `deleteNoteAction(noteId)`, `toggleShareAction(noteId, isPublic)` in the same file,
   reusing `titleSchema` / `contentJsonSchema` / `invalidInput()` and validating `noteId` with Zod too
 - Then the auth forms + `/authenticate` page, so the UI can be exercised without API probes
+
+---
+
+## Task: Create server action for updating notes - 2026-09-30
+
+Completed:
+- `lib/actions/notes.ts`: `updateNoteAction(noteId, input)`
+  - `requireAuth()` first (outside try/catch). `noteId` goes through `z.uuid()`: ids come from `crypto.randomUUID()`,
+    so a non-UUID gets the same "Note not found" as a missing note
+  - Input goes through the same strict `{ title?, contentJson? }` schema as create (renamed `createNoteSchema` →
+    `noteFieldsSchema`; `CreateNoteInput` / `UpdateNoteInput` both derive from it). Omitted fields stay unchanged, and a cleared
+    title falls back to "Untitled note"
+  - Ownership: `updateNote()` is scoped by `user_id` in SQL, so `null` covers both "missing" and "someone else's" →
+    `{ success: false, error: 'Note not found' }`. A DB error → "Could not save the note. Please try again." (logged)
+  - `revalidateNote(note)` (module-private) revalidates `/dashboard`, `/notes/{id}`, and `/p/{slug}` when the note is shared
+- `lib/actions/notes.test.ts`: 14 new tests (title + content, updated_at bump / created_at kept, partial updates, cleared
+  title → default, revalidated paths incl. the public page, cross-user → not found + untouched, missing / non-UUID id,
+  invalid title/content with no write, tampered `userId`, signed-out redirect, DB failure)
+
+Decisions:
+- Per the Next 16 docs (Context7), any `revalidatePath` in a server action re-renders the caller's current route in the
+  same response. Every auto-save therefore re-renders `/notes/[id]` server-side (one session lookup + one indexed query, cheap)
+- **Editor task:** `NoteEditor` must treat its note props as *initial* values (useState initializers, TipTap `content` on
+  creation only). Never sync editor/title state back from props in an effect, or the re-render after a save would clobber
+  what the user typed while the save was in flight
+
+Verified:
+- Playwright MCP, dev server, throwaway `'use client'` probe page (deleted afterwards along with the probe users; DB back to
+  0 users/notes/sessions): update trimmed the title and bumped `updated_at` (backdated to 2020 first); invalid content →
+  "Note content must be a TipTap document"; random UUID → "Note not found"; a second signed-up user → "Note not found" for the
+  first user's note; signed out → redirected to `/authenticate` with the note unchanged. No server errors
+- build, lint, bun test (124 tests) pass. `test:e2e` still reports "No tests found" (no playwright.config.ts yet)
+
+Notes for next tasks:
+- `POST /api/auth/sign-out` needs `Content-Type: application/json` and a body (`{}`), otherwise it returns 415 and the session
+  survives. The auth client handles this. Raw `fetch` probes/E2E helpers must send them
+
+Next recommended steps:
+- `deleteNoteAction(noteId)` and `toggleShareAction(noteId, isPublic)` in the same file, reusing `noteIdSchema`,
+  `NOT_FOUND_ERROR` and `revalidateNote()` (delete: revalidate `/dashboard`, plus the old `/p/{slug}` if the note was shared,
+  which means reading the note first or deleting with `RETURNING`)
+- Then the auth forms + `/authenticate` page

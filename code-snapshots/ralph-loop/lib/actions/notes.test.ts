@@ -4,8 +4,16 @@ import * as authModule from '../auth';
 import { SIGN_IN_PATH, type Session } from '../auth';
 import { closeDb, get, run } from '../db';
 import * as notesModule from '../notes';
-import { DEFAULT_NOTE_TITLE, EMPTY_DOC_JSON, getNotesByUser } from '../notes';
-import { createNoteAction } from './notes';
+import {
+  DEFAULT_NOTE_TITLE,
+  EMPTY_DOC_JSON,
+  createNote,
+  getNoteById,
+  getNotesByUser,
+  setNotePublic,
+  type Note,
+} from '../notes';
+import { createNoteAction, updateNoteAction } from './notes';
 
 // Spies (restored after each test) rather than `mock.module`, which would leak into later test files
 // that import the real `lib/auth.ts`.
@@ -194,6 +202,178 @@ describe('createNoteAction', () => {
       success: false,
       error: 'Could not create the note. Please try again.',
     });
+    expect(consoleError).toHaveBeenCalledTimes(1);
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+});
+
+describe('updateNoteAction', () => {
+  const OLD_TIMESTAMP = '2020-01-01 00:00:00';
+  const helloDoc = JSON.stringify({
+    type: 'doc',
+    content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Hello' }] }],
+  });
+
+  /** A note owned by `userId` with an old `updated_at`, so a bump is visible despite 1-second resolution. */
+  async function seedNote(userId: string): Promise<Note> {
+    const note = await createNote(userId, { title: 'Original' });
+    run('UPDATE notes SET updated_at = ? WHERE id = ?', [OLD_TIMESTAMP, note.id]);
+    return { ...note, updatedAt: OLD_TIMESTAMP };
+  }
+
+  test('updates the title and content of the signed-in user’s note', async () => {
+    const note = await seedNote('user-1');
+    signInAs('user-1');
+
+    const result = await updateNoteAction(note.id, {
+      title: '  Groceries  ',
+      contentJson: helloDoc,
+    });
+
+    expect(result).toMatchObject({
+      success: true,
+      data: { id: note.id, userId: 'user-1', title: 'Groceries', contentJson: helloDoc },
+    });
+    expect(result.success && result.data).toEqual(await getNoteById('user-1', note.id));
+  });
+
+  test('bumps updated_at and keeps created_at', async () => {
+    const note = await seedNote('user-1');
+    signInAs('user-1');
+
+    const result = await updateNoteAction(note.id, { title: 'New' });
+
+    expect(result.success && result.data.updatedAt).not.toBe(OLD_TIMESTAMP);
+    expect(result.success && result.data.createdAt).toBe(note.createdAt);
+  });
+
+  test('leaves omitted fields unchanged', async () => {
+    const note = await seedNote('user-1');
+    signInAs('user-1');
+
+    const titleOnly = await updateNoteAction(note.id, { title: 'New title' });
+    expect(titleOnly).toMatchObject({
+      success: true,
+      data: { title: 'New title', contentJson: EMPTY_DOC_JSON },
+    });
+
+    const contentOnly = await updateNoteAction(note.id, { contentJson: helloDoc });
+    expect(contentOnly).toMatchObject({
+      success: true,
+      data: { title: 'New title', contentJson: helloDoc },
+    });
+  });
+
+  test('falls back to the default title when the title is cleared', async () => {
+    const note = await seedNote('user-1');
+    signInAs('user-1');
+
+    const result = await updateNoteAction(note.id, { title: '  ' });
+
+    expect(result).toMatchObject({ success: true, data: { title: DEFAULT_NOTE_TITLE } });
+  });
+
+  test('revalidates the dashboard and the note page', async () => {
+    const note = await seedNote('user-1');
+    signInAs('user-1');
+
+    await updateNoteAction(note.id, { title: 'New' });
+
+    expect(revalidatePath.mock.calls).toEqual([['/dashboard'], [`/notes/${note.id}`]]);
+  });
+
+  test('also revalidates the public page of a shared note', async () => {
+    const note = await seedNote('user-1');
+    const shared = await setNotePublic('user-1', note.id, true);
+    signInAs('user-1');
+
+    await updateNoteAction(note.id, { title: 'New' });
+
+    expect(revalidatePath).toHaveBeenCalledWith(`/p/${shared?.publicSlug}`);
+    expect(revalidatePath).toHaveBeenCalledTimes(3);
+  });
+
+  test('returns "Note not found" for another user’s note and leaves it untouched', async () => {
+    const note = await seedNote('user-2');
+    signInAs('user-1');
+
+    const result = await updateNoteAction(note.id, { title: 'Hijacked' });
+
+    expect(result).toEqual({ success: false, error: 'Note not found' });
+    expect(await getNoteById('user-2', note.id)).toMatchObject({
+      title: 'Original',
+      updatedAt: OLD_TIMESTAMP,
+    });
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    ['a missing note', crypto.randomUUID()],
+    ['an id that is not a UUID', 'not-a-note-id'],
+  ])('returns "Note not found" for %s', async (_case, noteId) => {
+    signInAs('user-1');
+
+    const result = await updateNoteAction(noteId, { title: 'New' });
+
+    expect(result).toEqual({ success: false, error: 'Note not found' });
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    [
+      'a title that is too long',
+      { title: 'a'.repeat(201) },
+      'Title must be at most 200 characters',
+    ],
+    [
+      'JSON that is not a TipTap document',
+      { contentJson: JSON.stringify({ type: 'paragraph' }) },
+      'Note content must be a TipTap document',
+    ],
+  ])('rejects %s without changing the note', async (_case, input, error) => {
+    const note = await seedNote('user-1');
+    signInAs('user-1');
+
+    const result = await updateNoteAction(note.id, input);
+
+    expect(result).toEqual({ success: false, error });
+    expect(await getNoteById('user-1', note.id)).toEqual(note);
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  test('rejects a userId in the input, so a note can’t be moved to another user', async () => {
+    const note = await seedNote('user-1');
+    signInAs('user-1');
+    const tampered = { title: 'Yours now', userId: 'user-2' };
+
+    const result = await updateNoteAction(note.id, tampered);
+
+    expect(result.success).toBe(false);
+    expect(await getNoteById('user-1', note.id)).toEqual(note);
+  });
+
+  test('redirects to the sign-in page when signed out, without changing the note', async () => {
+    const note = await seedNote('user-1');
+    signOut();
+
+    await expect(updateNoteAction(note.id, { title: 'New' })).rejects.toThrow(
+      new RedirectError(SIGN_IN_PATH),
+    );
+    expect(await getNoteById('user-1', note.id)).toEqual(note);
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  test('returns a friendly error when the database write fails', async () => {
+    const note = await seedNote('user-1');
+    signInAs('user-1');
+    spyOn(notesModule, 'updateNote').mockRejectedValue(
+      new Error('SQLITE_BUSY: database is locked'),
+    );
+    const consoleError = spyOn(console, 'error').mockImplementation(() => {});
+
+    const result = await updateNoteAction(note.id, { title: 'New' });
+
+    expect(result).toEqual({ success: false, error: 'Could not save the note. Please try again.' });
     expect(consoleError).toHaveBeenCalledTimes(1);
     expect(revalidatePath).not.toHaveBeenCalled();
   });

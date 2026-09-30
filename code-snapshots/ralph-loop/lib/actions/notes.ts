@@ -3,10 +3,12 @@
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { requireAuth } from '../auth';
-import { DEFAULT_NOTE_TITLE, createNote, type Note } from '../notes';
+import { DEFAULT_NOTE_TITLE, createNote, updateNote, type Note } from '../notes';
 import type { ActionResult } from './result';
 
 const DASHBOARD_PATH = '/dashboard';
+
+const NOT_FOUND_ERROR = 'Note not found';
 
 const MAX_TITLE_LENGTH = 200;
 
@@ -41,13 +43,17 @@ const contentJsonSchema = z
   .max(MAX_CONTENT_JSON_LENGTH, 'Note content is too large')
   .refine(isTipTapDocJson, 'Note content must be a TipTap document');
 
+/** Note ids come from `crypto.randomUUID()`, so anything else can't match a note. */
+const noteIdSchema = z.uuid(NOT_FOUND_ERROR);
+
 // Strict, so a client can't slip in fields like `userId`: the owner always comes from the session.
-const createNoteSchema = z.strictObject({
+const noteFieldsSchema = z.strictObject({
   title: titleSchema.optional(),
   contentJson: contentJsonSchema.optional(),
 });
 
-export type CreateNoteInput = z.input<typeof createNoteSchema>;
+export type CreateNoteInput = z.input<typeof noteFieldsSchema>;
+export type UpdateNoteInput = z.input<typeof noteFieldsSchema>;
 
 function invalidInput(error: z.ZodError): ActionResult<never> {
   return { success: false, error: error.issues[0]?.message ?? 'Invalid input' };
@@ -61,7 +67,7 @@ export async function createNoteAction(input: CreateNoteInput = {}): Promise<Act
   // Outside the try/catch: `requireAuth()` redirects by throwing.
   const { user } = await requireAuth();
 
-  const parsed = createNoteSchema.safeParse(input);
+  const parsed = noteFieldsSchema.safeParse(input);
   if (!parsed.success) {
     return invalidInput(parsed.error);
   }
@@ -76,4 +82,52 @@ export async function createNoteAction(input: CreateNoteInput = {}): Promise<Act
 
   revalidatePath(DASHBOARD_PATH);
   return { success: true, data: note };
+}
+
+/**
+ * Updates the title and/or content of a note owned by the signed-in user. Omitted fields are left unchanged.
+ * Returns "Note not found" for missing notes and for notes owned by someone else alike.
+ * Redirects to the sign-in page when there is no session.
+ */
+export async function updateNoteAction(
+  noteId: string,
+  input: UpdateNoteInput,
+): Promise<ActionResult<Note>> {
+  const { user } = await requireAuth();
+
+  const parsedId = noteIdSchema.safeParse(noteId);
+  if (!parsedId.success) {
+    return invalidInput(parsedId.error);
+  }
+  const parsed = noteFieldsSchema.safeParse(input);
+  if (!parsed.success) {
+    return invalidInput(parsed.error);
+  }
+
+  let note: Note | null;
+  try {
+    // Scoped by user id in SQL, so this is also the ownership check.
+    note = await updateNote(user.id, parsedId.data, parsed.data);
+  } catch (error) {
+    console.error('Failed to update note', error);
+    return { success: false, error: 'Could not save the note. Please try again.' };
+  }
+  if (!note) {
+    return { success: false, error: NOT_FOUND_ERROR };
+  }
+
+  revalidateNote(note);
+  return { success: true, data: note };
+}
+
+/**
+ * Invalidates every page that shows the note. Next.js also re-renders the caller's current route in the action
+ * response, so client components must treat their note props as initial values rather than resetting from them.
+ */
+function revalidateNote(note: Note) {
+  revalidatePath(DASHBOARD_PATH);
+  revalidatePath(`/notes/${note.id}`);
+  if (note.publicSlug) {
+    revalidatePath(`/p/${note.publicSlug}`);
+  }
 }
