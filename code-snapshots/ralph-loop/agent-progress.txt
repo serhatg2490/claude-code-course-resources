@@ -390,3 +390,39 @@ Verified:
 Next recommended steps:
 - `lib/auth-client.ts` (`createAuthClient` from `better-auth/react`, exporting `signIn`, `signUp`, `signOut`, `useSession`)
 - Then the server actions in `lib/actions/notes.ts` (call `requireAuth()` first, use `session.user.id`)
+
+---
+
+## Task: Create auth client for frontend - 2026-09-30
+
+Completed:
+- `lib/auth-client.ts`: `authClient = createAuthClient()` from `better-auth/react` (checked via Context7 and the installed
+  1.4.16 types). Exports `signIn`, `signUp`, `signOut`, `useSession` and a `ClientSession` type (`$Infer.Session`)
+- `lib/auth-client.test.ts`: 6 bun tests. Each test sends the client's requests to an in-memory `createAuth(openDb(':memory:'))`
+  instance through the per-call `fetchOptions.customFetchImpl` (so the real client and the real route handler run with no
+  network or global fetch stub). Covered: exports, sign-up creates the user, short password → `PASSWORD_TOO_SHORT`, sign-in
+  ok, wrong password → 401 `INVALID_EMAIL_OR_PASSWORD`, getSession without a cookie → null
+
+Decisions:
+- No `baseURL`: the app calls its own `/api/auth` route. In the browser the client falls back to `window.location.origin`.
+  During SSR of client components it reads `BETTER_AUTH_URL` (not exposed to the browser, and not needed there)
+- No `inferAdditionalFields` plugin: the server config adds no custom user/session fields. Add it if that changes
+- `ClientSession` gets its own name so it doesn't clash with the server `Session` type in `lib/auth.ts`
+
+Verified:
+- Playwright MCP, dev server, with a throwaway `'use client'` page that used all four exports: the initial session was null;
+  sign-up flipped `useSession` to the new user with no reload; sign-out → signed out; a wrong password showed
+  `INVALID_EMAIL_OR_PASSWORD` (the only console error is the browser logging the 401); sign-in → signed in again.
+  Afterwards the probe page and probe user were deleted (DB back to 0 users/accounts/sessions)
+- build, lint, bun test (97 tests) pass. `test:e2e` still reports "No tests found" (no playwright.config.ts yet)
+
+Notes for next tasks:
+- The client returns `{ data, error }` and doesn't throw. The forms should branch on `error` (`error.code`, `error.message`,
+  `error.status`). `useSession()` updates on its own after signIn/signUp/signOut. Server components still need
+  `router.refresh()` (or a navigation) to see the new cookie
+- Bun's `changes` count for a DELETE also includes rows removed by `ON DELETE CASCADE` (deleting one user reported 3)
+
+Next recommended steps:
+- `components/SignUpForm.tsx` / `components/LoginForm.tsx` (client components on top of `signUp.email` / `signIn.email`),
+  then `app/authenticate/page.tsx`
+- Or the server actions in `lib/actions/notes.ts` (no UI dependency)
