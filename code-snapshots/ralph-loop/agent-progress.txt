@@ -195,3 +195,33 @@ Verified:
 Next recommended steps:
 - `updateNote` (dynamic SET for the provided fields + `updated_at = datetime('now')`,
   `WHERE id = ? AND user_id = ? RETURNING *`), then `deleteNote` and the sharing functions
+
+---
+
+## Task: Implement updateNote function - 2026-09-30
+
+Completed:
+- `lib/notes.ts`: `UpdateNoteData` type and `async updateNote(userId, noteId, data)`
+  - A single `UPDATE ... SET title = COALESCE($title, title), content_json = COALESCE($contentJson, content_json),
+    updated_at = datetime('now') WHERE id = $noteId AND user_id = $userId RETURNING *`, so there's no dynamic SQL
+    string building. Both columns are NOT NULL, so a NULL binding means "not provided"
+  - Returns `null` when the note doesn't exist or another user owns it (same behavior as `getNoteById`)
+  - With no fields to change (`{}`), returns the current note without touching `updated_at`
+- `lib/notes.test.ts`: 9 new tests (title only, content only, both + persisted, empty-string title kept,
+  updated_at bumped / created_at unchanged, no-op update, cross-user → null and untouched, missing → null,
+  sharing state unchanged). The test notes are seeded with an old explicit `updated_at`
+
+Decisions:
+- First use of named bindings (`$name` in SQL, bare keys in the params object, because of `strict: true`)
+- An empty-string title is stored as-is (like `createNote`). Blank-title rules belong in the
+  `updateNoteAction` Zod schema
+
+Verified:
+- bun test (55 tests), lint, build and `tsc --noEmit` pass. No UI changes, so no Playwright check
+- `test:e2e` still reports "No tests found" (no playwright.config.ts yet)
+
+Next recommended steps:
+- `deleteNote(userId, noteId)`: `DELETE ... WHERE id = ? AND user_id = ?` and return `changes > 0`
+  (the PRD asks for a boolean, while SPEC.MD says `void`. Go with boolean so the action can return a 404-style error)
+- Then `setNotePublic` / `getNoteByPublicSlug` (keep an existing slug when re-enabling? SPEC.MD §7.2 says to generate
+  one only if none exists, but disabling clears it, so re-enabling always gets a fresh slug)

@@ -115,3 +115,41 @@ export async function getNotesByUser(userId: string): Promise<Note[]> {
   );
   return rows.map(toNote);
 }
+
+export type UpdateNoteData = {
+  title?: string;
+  /** Stringified TipTap document. */
+  contentJson?: string;
+};
+
+/**
+ * Updates the provided fields of a note owned by `userId` and bumps `updated_at`.
+ * Returns the updated note, or `null` when it doesn't exist or belongs to someone else.
+ * With no fields to change, the note is returned as-is without touching `updated_at`.
+ */
+export async function updateNote(
+  userId: string,
+  noteId: string,
+  data: UpdateNoteData,
+): Promise<Note | null> {
+  if (data.title === undefined && data.contentJson === undefined) {
+    return getNoteById(userId, noteId);
+  }
+
+  // Both columns are NOT NULL, so a NULL binding unambiguously means "keep the current value".
+  const row = get<NoteRow>(
+    `UPDATE notes
+     SET title = COALESCE($title, title),
+         content_json = COALESCE($contentJson, content_json),
+         updated_at = datetime('now')
+     WHERE id = $noteId AND user_id = $userId
+     RETURNING *`,
+    {
+      title: data.title ?? null,
+      contentJson: data.contentJson ?? null,
+      noteId,
+      userId,
+    },
+  );
+  return row ? toNote(row) : null;
+}

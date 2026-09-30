@@ -9,6 +9,7 @@ import {
   getNoteById,
   getNotesByUser,
   toNote,
+  updateNote,
   type NoteRow,
 } from './notes';
 
@@ -236,5 +237,83 @@ describe('reading notes', () => {
 
       expect(await getNotesByUser('user-1')).toEqual([created]);
     });
+  });
+});
+
+describe('updateNote', () => {
+  const SEEDED_AT = '2026-01-01 10:00:00';
+  const NEW_CONTENT = JSON.stringify({
+    type: 'doc',
+    content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Updated' }] }],
+  });
+
+  beforeEach(() => {
+    run("INSERT INTO user (id, name, email) VALUES ('user-1', 'Ada', 'ada@example.com')");
+    run("INSERT INTO user (id, name, email) VALUES ('user-2', 'Grace', 'grace@example.com')");
+    // Old explicit timestamps, so the `updated_at` bump is observable without sleeping.
+    run(
+      'INSERT INTO notes (id, user_id, title, content_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+      ['note-1', 'user-1', 'Original', EMPTY_DOC_JSON, SEEDED_AT, SEEDED_AT],
+    );
+  });
+
+  test('updates the title only', async () => {
+    const note = await updateNote('user-1', 'note-1', { title: 'Renamed' });
+
+    expect(note).toMatchObject({ title: 'Renamed', contentJson: EMPTY_DOC_JSON });
+  });
+
+  test('updates the content only', async () => {
+    const note = await updateNote('user-1', 'note-1', { contentJson: NEW_CONTENT });
+
+    expect(note).toMatchObject({ title: 'Original', contentJson: NEW_CONTENT });
+  });
+
+  test('updates title and content together and persists them', async () => {
+    const note = await updateNote('user-1', 'note-1', { title: 'Both', contentJson: NEW_CONTENT });
+
+    expect(note).toMatchObject({ title: 'Both', contentJson: NEW_CONTENT });
+    expect(await getNoteById('user-1', 'note-1')).toEqual(note);
+  });
+
+  test('keeps an empty-string title rather than treating it as missing', async () => {
+    const note = await updateNote('user-1', 'note-1', { title: '' });
+
+    expect(note?.title).toBe('');
+  });
+
+  test('bumps updated_at and leaves created_at alone', async () => {
+    const note = await updateNote('user-1', 'note-1', { title: 'Renamed' });
+
+    expect(note?.createdAt).toBe(SEEDED_AT);
+    expect(note?.updatedAt).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
+    expect(note && note.updatedAt > SEEDED_AT).toBe(true);
+  });
+
+  test('returns the note unchanged when there is nothing to update', async () => {
+    const note = await updateNote('user-1', 'note-1', {});
+
+    expect(note).toMatchObject({ title: 'Original', updatedAt: SEEDED_AT });
+  });
+
+  test("returns null and leaves another user's note untouched", async () => {
+    expect(await updateNote('user-2', 'note-1', { title: 'Hijacked' })).toBeNull();
+
+    expect(await getNoteById('user-1', 'note-1')).toMatchObject({
+      title: 'Original',
+      updatedAt: SEEDED_AT,
+    });
+  });
+
+  test('returns null for a note that does not exist', async () => {
+    expect(await updateNote('user-1', 'missing', { title: 'Nope' })).toBeNull();
+  });
+
+  test('does not change public sharing state', async () => {
+    run("UPDATE notes SET is_public = 1, public_slug = 'abcdefghijklmnopqrstu' WHERE id = 'note-1'");
+
+    const note = await updateNote('user-1', 'note-1', { title: 'Still shared' });
+
+    expect(note).toMatchObject({ isPublic: true, publicSlug: 'abcdefghijklmnopqrstu' });
   });
 });
