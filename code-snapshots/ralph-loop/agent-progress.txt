@@ -512,3 +512,42 @@ Next recommended steps:
   `NOT_FOUND_ERROR` and `revalidateNote()` (delete: revalidate `/dashboard`, plus the old `/p/{slug}` if the note was shared,
   which means reading the note first or deleting with `RETURNING`)
 - Then the auth forms + `/authenticate` page
+
+---
+
+## Task: Create server action for deleting notes - 2026-09-30
+
+Completed:
+- `lib/actions/notes.ts`: `deleteNoteAction(noteId): Promise<ActionResult<null>>`
+  - `requireAuth()` first (outside try/catch), `noteId` through `noteIdSchema` (non-UUID → "Note not found")
+  - Reads the note with `getNoteById(user.id, id)` first. That's the explicit ownership check, and it tells us the
+    `publicSlug` to invalidate. Then `deleteNote(user.id, id)` (also user-scoped in SQL). If that returns `false` (a concurrent
+    delete in between), the result is "Note not found"
+  - `revalidateNote(note)` → `/dashboard`, `/notes/{id}`, and `/p/{slug}` for a shared note, so a deleted public page stops
+    being served from cache. A DB error → "Could not delete the note. Please try again." (logged)
+- `lib/actions/notes.test.ts`: 10 new tests (owner delete leaves other notes, revalidated paths, shared note's public page
+  revalidated + slug no longer resolves, cross-user → not found + note kept, missing / non-UUID id, double delete, race
+  between read and delete, signed-out redirect, DB failure)
+
+Decisions:
+- Kept `deleteNote()` returning `boolean` (its PRD contract) and did read-then-delete in the action rather than changing it
+  to `DELETE ... RETURNING *`. The extra read is a single indexed lookup
+- Success data is `null`: the caller already knows the id, and the UI only needs `success`
+
+Verified:
+- Playwright MCP, dev server, throwaway `'use client'` probe page (deleted afterwards along with the probe users; DB back to
+  0 users/notes/sessions): signed out → redirected to `/authenticate`; signed in → create + delete → `{ success: true }` and
+  the row is gone; deleting again → "Note not found"; a second user deleting the first user's note → "Note not found" and
+  the note stays in the DB. No server errors
+- build, lint, bun test (134 tests) pass. `test:e2e` still reports "No tests found" (no playwright.config.ts yet)
+
+Notes for next tasks:
+- **Delete button UI:** Next re-renders the caller's current route in the action response when `revalidatePath` is called.
+  Deleting from `/notes/[id]` will re-render that page, which will then `notFound()`. Check in the browser whether a 404
+  flashes before `router.push('/dashboard')`. If it does, have the client navigate first or use `router.replace`, or have a
+  dedicated action `redirect('/dashboard')` after deleting
+
+Next recommended steps:
+- `toggleShareAction(noteId, isPublic)` (reuse `noteIdSchema`, `NOT_FOUND_ERROR`, `revalidateNote()`. When disabling,
+  revalidate the *old* slug too, which `setNotePublic` has already cleared, so read the note first like delete does)
+- Then the auth forms + `/authenticate` page

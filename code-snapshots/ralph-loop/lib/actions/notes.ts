@@ -3,7 +3,14 @@
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { requireAuth } from '../auth';
-import { DEFAULT_NOTE_TITLE, createNote, updateNote, type Note } from '../notes';
+import {
+  DEFAULT_NOTE_TITLE,
+  createNote,
+  deleteNote,
+  getNoteById,
+  updateNote,
+  type Note,
+} from '../notes';
 import type { ActionResult } from './result';
 
 const DASHBOARD_PATH = '/dashboard';
@@ -118,6 +125,39 @@ export async function updateNoteAction(
 
   revalidateNote(note);
   return { success: true, data: note };
+}
+
+/**
+ * Permanently deletes a note owned by the signed-in user.
+ * Returns "Note not found" for missing notes and for notes owned by someone else alike.
+ * Redirects to the sign-in page when there is no session.
+ */
+export async function deleteNoteAction(noteId: string): Promise<ActionResult<null>> {
+  const { user } = await requireAuth();
+
+  const parsedId = noteIdSchema.safeParse(noteId);
+  if (!parsedId.success) {
+    return invalidInput(parsedId.error);
+  }
+
+  let note: Note | null;
+  try {
+    // Read first (scoped by user id, so this is the ownership check) to know which public page to invalidate.
+    note = await getNoteById(user.id, parsedId.data);
+    if (note && !(await deleteNote(user.id, note.id))) {
+      // Deleted by a concurrent request in between.
+      note = null;
+    }
+  } catch (error) {
+    console.error('Failed to delete note', error);
+    return { success: false, error: 'Could not delete the note. Please try again.' };
+  }
+  if (!note) {
+    return { success: false, error: NOT_FOUND_ERROR };
+  }
+
+  revalidateNote(note);
+  return { success: true, data: null };
 }
 
 /**

@@ -9,11 +9,12 @@ import {
   EMPTY_DOC_JSON,
   createNote,
   getNoteById,
+  getNoteByPublicSlug,
   getNotesByUser,
   setNotePublic,
   type Note,
 } from '../notes';
-import { createNoteAction, updateNoteAction } from './notes';
+import { createNoteAction, deleteNoteAction, updateNoteAction } from './notes';
 
 // Spies (restored after each test) rather than `mock.module`, which would leak into later test files
 // that import the real `lib/auth.ts`.
@@ -375,6 +376,118 @@ describe('updateNoteAction', () => {
 
     expect(result).toEqual({ success: false, error: 'Could not save the note. Please try again.' });
     expect(consoleError).toHaveBeenCalledTimes(1);
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+});
+
+describe('deleteNoteAction', () => {
+  test('deletes the signed-in user’s note', async () => {
+    const note = await createNote('user-1', { title: 'Doomed' });
+    const kept = await createNote('user-1', { title: 'Kept' });
+    signInAs('user-1');
+
+    const result = await deleteNoteAction(note.id);
+
+    expect(result).toEqual({ success: true, data: null });
+    expect(await getNoteById('user-1', note.id)).toBeNull();
+    expect(await getNotesByUser('user-1')).toEqual([kept]);
+  });
+
+  test('revalidates the dashboard and the note page', async () => {
+    const note = await createNote('user-1');
+    signInAs('user-1');
+
+    await deleteNoteAction(note.id);
+
+    expect(revalidatePath.mock.calls).toEqual([['/dashboard'], [`/notes/${note.id}`]]);
+  });
+
+  test('also revalidates the public page of a shared note, which then stops resolving', async () => {
+    const note = await createNote('user-1');
+    const shared = await setNotePublic('user-1', note.id, true);
+    const slug = shared?.publicSlug ?? '';
+    signInAs('user-1');
+
+    await deleteNoteAction(note.id);
+
+    expect(revalidatePath).toHaveBeenCalledWith(`/p/${slug}`);
+    expect(revalidatePath).toHaveBeenCalledTimes(3);
+    expect(await getNoteByPublicSlug(slug)).toBeNull();
+  });
+
+  test('returns "Note not found" for another user’s note and leaves it in place', async () => {
+    const note = await createNote('user-2');
+    signInAs('user-1');
+
+    const result = await deleteNoteAction(note.id);
+
+    expect(result).toEqual({ success: false, error: 'Note not found' });
+    expect(await getNoteById('user-2', note.id)).toEqual(note);
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    ['a missing note', crypto.randomUUID()],
+    ['an id that is not a UUID', 'not-a-note-id'],
+  ])('returns "Note not found" for %s', async (_case, noteId) => {
+    await createNote('user-1');
+    signInAs('user-1');
+
+    const result = await deleteNoteAction(noteId);
+
+    expect(result).toEqual({ success: false, error: 'Note not found' });
+    expect(countNotes()).toBe(1);
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  test('returns "Note not found" when the note is already deleted', async () => {
+    const note = await createNote('user-1');
+    signInAs('user-1');
+
+    await deleteNoteAction(note.id);
+    revalidatePath.mockClear();
+    const result = await deleteNoteAction(note.id);
+
+    expect(result).toEqual({ success: false, error: 'Note not found' });
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  test('returns "Note not found" when the note disappears between the read and the delete', async () => {
+    const note = await createNote('user-1');
+    signInAs('user-1');
+    spyOn(notesModule, 'deleteNote').mockResolvedValue(false);
+
+    const result = await deleteNoteAction(note.id);
+
+    expect(result).toEqual({ success: false, error: 'Note not found' });
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  test('redirects to the sign-in page when signed out, without deleting the note', async () => {
+    const note = await createNote('user-1');
+    signOut();
+
+    await expect(deleteNoteAction(note.id)).rejects.toThrow(new RedirectError(SIGN_IN_PATH));
+    expect(await getNoteById('user-1', note.id)).toEqual(note);
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  test('returns a friendly error when the database write fails', async () => {
+    const note = await createNote('user-1');
+    signInAs('user-1');
+    spyOn(notesModule, 'deleteNote').mockRejectedValue(
+      new Error('SQLITE_BUSY: database is locked'),
+    );
+    const consoleError = spyOn(console, 'error').mockImplementation(() => {});
+
+    const result = await deleteNoteAction(note.id);
+
+    expect(result).toEqual({
+      success: false,
+      error: 'Could not delete the note. Please try again.',
+    });
+    expect(consoleError).toHaveBeenCalledTimes(1);
+    expect(await getNoteById('user-1', note.id)).toEqual(note);
     expect(revalidatePath).not.toHaveBeenCalled();
   });
 });
