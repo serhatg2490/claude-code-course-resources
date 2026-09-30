@@ -324,3 +324,31 @@ Notes for next tasks:
 Next recommended steps:
 - `app/api/auth/[...all]/route.ts` with `toNextJsHandler(auth)` from `better-auth/next-js` (check its export via Context7)
 - Then `getSession()` / `requireAuth()` in lib/auth.ts (`auth.api.getSession({ headers: await headers() })`, `redirect('/authenticate')`)
+
+---
+
+## Task: Create better-auth API route - 2026-09-30
+
+Completed:
+- `app/api/auth/[...all]/route.ts`: `export const { GET, POST } = toNextJsHandler(auth)` from `better-auth/next-js`
+  (signature checked against the installed 1.4.16 types). It's the app's only API route. Only GET and POST are exported,
+  since the email/password + session endpoints use just those two methods
+
+Verified (dev server, against data/app.db):
+- curl: `/api/auth/ok` → `{"ok":true}`; anonymous `get-session` → `null`; `sign-up/email` → 200 with a session cookie;
+  `get-session` with the cookie → the user; wrong password → 401 `INVALID_EMAIL_OR_PASSWORD`; `sign-out` → 200, and after that
+  `get-session` → `null`
+- Playwright MCP: the same sign-up → get-session → sign-out flow through same-origin `fetch` from the browser (the way the
+  auth client will call it) works, cookies included
+- The probe users were deleted afterwards (sessions/accounts cascade)
+- build (the route shows up as `ƒ /api/auth/[...all]`), lint, and bun test (85 tests) pass. `test:e2e` still reports
+  "No tests found" (no playwright.config.ts yet)
+
+Notes for next tasks:
+- The curl probes sent `Origin: http://localhost:3000` with every POST, because better-auth checks the origin. What happens
+  without the header wasn't tested. E2E helpers that call the API directly should send one too
+- Don't stop the dev server with `pkill -f "next dev"` inside a compound shell command: it matches its own shell. Use the PID
+
+Next recommended steps:
+- `getSession()` / `requireAuth()` in lib/auth.ts (`auth.api.getSession({ headers: await headers() })`, `redirect('/authenticate')`)
+- `lib/auth-client.ts` (`createAuthClient` from `better-auth/react`)
