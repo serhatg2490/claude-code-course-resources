@@ -426,3 +426,47 @@ Next recommended steps:
 - `components/SignUpForm.tsx` / `components/LoginForm.tsx` (client components on top of `signUp.email` / `signIn.email`),
   then `app/authenticate/page.tsx`
 - Or the server actions in `lib/actions/notes.ts` (no UI dependency)
+
+---
+
+## Task: Create server action for creating notes - 2026-09-30
+
+Completed:
+- `lib/actions/result.ts`: `ActionResult<T>` = `{ success: true; data: T } | { success: false; error: string }`, the return
+  type for every server action. It lives in its own module because a `'use server'` file may only export async functions
+  (exporting types is fine, but a shared type belongs outside any single action file)
+- `lib/actions/notes.ts` (`'use server'`): `createNoteAction(input = {})`
+  - `requireAuth()` first, outside any try/catch (it redirects by throwing). The owner is always `session.user.id`
+  - Zod `strictObject` for `{ title?, contentJson? }`, so unknown keys like `userId` are rejected. Title is trimmed,
+    max 200 chars, and a blank title falls back to `DEFAULT_NOTE_TITLE`. `contentJson` must be at most 1,000,000 chars
+    (Next's default 1 MB action body limit) and parse to a TipTap doc (`type: 'doc'`, children with a string `type`)
+  - A DB error is logged and returned as a friendly `{ success: false }`. `revalidatePath('/dashboard')` runs after a
+    successful write
+  - The schemas are module-private consts, ready for `updateNoteAction` to reuse
+- `lib/actions/notes.test.ts`: 13 bun tests (defaults + ownership, dashboard revalidated, trimmed title + content, blank
+  title → default, max-length title accepted, 5 invalid inputs rejected with no write, tampered `userId` rejected,
+  signed-out → redirect with no write, DB failure → friendly error)
+
+Decisions:
+- The tests replace `requireAuth`, `revalidatePath` and (for the DB-failure case) `createNote` with `spyOn(module, name)`
+  and call `mock.restore()` in `afterEach`, rather than `mock.module`, which would leak into `lib/auth.test.ts`. Bun's
+  `spyOn` on an ESM namespace also updates the named-import bindings in the module under test. The fake session is built
+  with the full `Session` type, so there are no casts
+- The action returns the full `Note`. It includes `userId`, but that's the caller's own id
+
+Verified:
+- Playwright MCP, dev server, with a throwaway `'use client'` page calling the action (deleted afterwards along with the
+  probe user): signed out → redirected to `/authenticate` and nothing written; signed in → created an "Untitled note" and a
+  trimmed "Probe title" note owned by the session user; invalid content → `{ success: false, error: 'Note content must be a
+  TipTap document' }`. No console or server errors
+- build, lint, bun test (110 tests) pass. `test:e2e` still reports "No tests found" (no playwright.config.ts yet)
+
+Notes for next tasks:
+- `bunx tsc --noEmit` can fail on stale `.next/dev/types/validator.ts` entries for deleted probe pages. `bun run build`
+  is unaffected, and the next `bun dev` regenerates the file
+- Client components: `const result = await createNoteAction(); if (result.success) router.push(`/notes/${result.data.id}`)`
+
+Next recommended steps:
+- `updateNoteAction(noteId, data)`, `deleteNoteAction(noteId)`, `toggleShareAction(noteId, isPublic)` in the same file,
+  reusing `titleSchema` / `contentJsonSchema` / `invalidInput()` and validating `noteId` with Zod too
+- Then the auth forms + `/authenticate` page, so the UI can be exercised without API probes
