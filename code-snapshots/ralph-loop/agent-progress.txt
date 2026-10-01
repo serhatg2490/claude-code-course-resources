@@ -710,3 +710,44 @@ Next recommended steps:
 - `components/Header.tsx` + `components/LogoutButton.tsx` in `app/layout.tsx` (logout: `signOut()` then
   `router.replace('/')` + `router.refresh()`)
 - Then the dashboard (`requireAuth()`, `getNotesByUser()`, `NoteList`, `CreateNoteButton`), so the post-login redirect lands somewhere
+
+---
+
+## Task: Add app header with auth state - 2026-10-01
+
+Completed:
+- `components/Header.tsx` (async server component): reads `getSession()` (React-cached, so a page that also checks the
+  session shares the lookup). Always shows the app name linking to `/`. Signed out: "Log in" (`/authenticate`) and a
+  primary "Sign up" (`/authenticate?mode=signup`). Signed in: the user's email (hidden below `sm`), "Dashboard" and the
+  LogoutButton. The links sit in a `<nav aria-label='Account'>`; the email is a `<p>` outside the list, since it isn't a link
+- `components/LogoutButton.tsx` (`'use client'`): `signOut()` inside `useTransition` ("Logging out…", disabled), then
+  `router.replace('/')` + `router.refresh()`. A failed or network-errored sign-out shows a `role="alert"` message and keeps
+  the user where they are. Built here because the Header's signed-in state needs it
+- `app/layout.tsx`: renders `<Header />` above `{children}`. Metadata title is now `{ default: 'Notes', template: '%s · Notes' }`
+  with a real description (the authenticate page is now titled "Log in or sign up · Notes")
+- `lib/site.ts` (new, client-safe): `APP_NAME`. `lib/routes.ts`: added `HOME_PATH`
+
+Decisions:
+- The header lives in the root layout and reads the session cookie, so every route is now dynamic (`/` included, as the
+  build output shows). That's expected for an auth-aware header. The session lookup is one indexed SQLite query
+- No unit tests: the Header is an async server component that renders a client component (needs the app router context),
+  and the logic is just a branch on `getSession()`, which already has tests. The E2E auth tests should cover it
+
+Verified (Playwright MCP, dev server; probe user deleted afterwards, DB back to 0 users/sessions/accounts/notes):
+- Signed out on `/`: "Notes", "Log in", "Sign up". Header "Sign up" → `/authenticate?mode=signup` (title "Log in or sign up · Notes")
+- Sign-up → `/dashboard` (still a 404, as expected): the header switched to the email + "Dashboard" + "Log out" with no manual
+  reload. Looks right in light and dark mode; at 375px the email is hidden and the links fit
+- "Log out" → `/`, header back to "Log in" / "Sign up", and the user's session row was deleted
+- build, lint, bun test (164 tests) pass. `test:e2e` still reports "No tests found" (no playwright.config.ts yet).
+  The only console warning is the scaffold landing page's `next/image` aspect-ratio warning (the landing page task replaces it)
+
+Notes for next tasks:
+- **"Implement logout functionality" task:** the LogoutButton already exists and is in the Header, and logout was verified
+  in the browser (redirect to `/`, session row gone). What's left is confirming the steps and marking it done (an E2E test
+  belongs to "Write E2E tests for authentication")
+- The landing page still uses `min-h-screen`, so with the header above it the page scrolls slightly. The landing page task
+  should drop that (e.g. a `flex-1` main in a `min-h-dvh flex flex-col` body)
+
+Next recommended steps:
+- The dashboard: `app/dashboard/page.tsx` (`requireAuth()`, `getNotesByUser()`), `components/NoteList.tsx`,
+  `components/CreateNoteButton.tsx`, so the post-login redirect stops 404ing
