@@ -237,7 +237,7 @@ describe('updateNoteAction', () => {
       success: true,
       data: { id: note.id, userId: 'user-1', title: 'Groceries', contentJson: helloDoc },
     });
-    expect(result.success && result.data).toEqual(await getNoteById('user-1', note.id));
+    expect(result.success ? result.data : null).toEqual(await getNoteById('user-1', note.id));
   });
 
   test('bumps updated_at and keeps created_at', async () => {
