@@ -667,3 +667,46 @@ Next recommended steps:
   would let the landing page/Header link straight to sign-up), `onSuccess` → `router.push('/dashboard')` +
   `router.refresh()`. If already signed in, redirect to `/dashboard` on the server via `getSession()`
 - Then the Header + LogoutButton
+
+---
+
+## Task: Create authentication page - 2026-10-01
+
+Completed:
+- `app/authenticate/page.tsx` (server component): signed-in visitors are `redirect`ed to `/dashboard` via `getSession()`.
+  `?mode=signup` shows sign-up, anything else (missing, unknown, repeated) shows login. A heading/description per mode,
+  and a card with a segmented "Log in / Sign up" toggle: two `<Link replace scroll={false}>`s in a labelled `<nav>`, with
+  `aria-current="page"` on the active one (it's also the style hook). Page title "Log in or sign up"
+- `components/AuthForm.tsx` (`'use client'`, the only client part of the page): renders `LoginForm` or `SignUpForm` for the
+  mode, and `onSuccess` → `router.replace('/dashboard')` + `router.refresh()`
+- `lib/auth-validation.ts`: `authModeSchema` (`z.enum(['login', 'signup']).catch('login')`) and the `AuthMode` type
+- `lib/routes.ts` (new, client-safe): `SIGN_IN_PATH` (moved out of `lib/auth.ts`) and `DASHBOARD_PATH` (moved out of
+  `lib/actions/notes.ts`). Server and client code now share one definition of each path. The tests import `SIGN_IN_PATH`
+  from there
+- `lib/auth-validation.test.ts`: 2 new `authModeSchema` tests
+
+Decisions:
+- The mode is a URL search param rather than client state, so the Header / landing page can link straight to
+  `/authenticate?mode=signup`, and the toggle needs no client JS beyond Next's `Link`. Switching modes resets the other form,
+  which is fine
+- `replace` (not `push`) both for the toggle and for the post-auth redirect, so Back doesn't walk through auth screens
+- No `?next=`/callback URL after login. Every successful auth goes to `/dashboard`, which avoids an open-redirect surface.
+  Add an allow-listed (same-origin path only) callback if deep links to `/notes/[id]` need it later
+
+Verified:
+- Playwright MCP, dev server (probe user deleted afterwards; DB back to 0 users/sessions/accounts/notes): `/authenticate` →
+  login view with "Log in" current; clicking "Sign up" → `?mode=signup`, sign-up form, `aria-current` moved, no new history
+  entry; signing up → landed on `/dashboard` (404 for now, the dashboard is a later task); revisiting `/authenticate` while
+  signed in → redirected to `/dashboard`; after sign-out, `?mode=bogus` → login view; wrong password → "Incorrect email or
+  password"; correct password → `/dashboard`. Console errors were only the expected 401 and the dashboard 404s
+- build (`ƒ /authenticate`), lint, bun test (164 tests) pass. `test:e2e` still reports "No tests found" (no playwright.config.ts yet)
+
+Notes for next tasks:
+- Don't run `oxfmt` on all of `app/`: it reformats the untouched scaffold files (`layout.tsx`, `page.tsx`, `globals.css`).
+  Format only the files you changed
+- The Header's "Sign up" link should go to `` `${SIGN_IN_PATH}?mode=signup` `` (or `{ pathname: SIGN_IN_PATH, query: { mode: 'signup' } }`)
+
+Next recommended steps:
+- `components/Header.tsx` + `components/LogoutButton.tsx` in `app/layout.tsx` (logout: `signOut()` then
+  `router.replace('/')` + `router.refresh()`)
+- Then the dashboard (`requireAuth()`, `getNotesByUser()`, `NoteList`, `CreateNoteButton`), so the post-login redirect lands somewhere

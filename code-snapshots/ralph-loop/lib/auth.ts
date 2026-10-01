@@ -6,11 +6,9 @@ import { redirect } from 'next/navigation';
 import { cache } from 'react';
 import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH } from './auth-validation';
 import { getDb } from './db';
+import { SIGN_IN_PATH } from './routes';
 
 const DAY_IN_SECONDS = 60 * 60 * 24;
-
-/** Where `requireAuth()` sends visitors without a session. */
-export const SIGN_IN_PATH = '/authenticate';
 
 /**
  * Builds a better-auth instance on top of a Bun SQLite connection.

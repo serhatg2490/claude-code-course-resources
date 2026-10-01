@@ -12,9 +12,8 @@ import {
   updateNote,
   type Note,
 } from '../notes';
+import { DASHBOARD_PATH } from '../routes';
 import type { ActionResult } from './result';
-
-const DASHBOARD_PATH = '/dashboard';
 
 const NOT_FOUND_ERROR = 'Note not found';
 

@@ -1,8 +1,9 @@
 import type { Database } from 'bun:sqlite';
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import { APIError } from 'better-auth/api';
-import { SIGN_IN_PATH, createAuth, createSessionHelpers } from './auth';
+import { createAuth, createSessionHelpers } from './auth';
 import { openDb } from './db';
+import { SIGN_IN_PATH } from './routes';
 
 /** Thrown by the mocked `redirect()`, so tests can assert on the target without Next.js internals. */
 class RedirectError extends Error {

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import {
   MAX_PASSWORD_LENGTH,
   MIN_PASSWORD_LENGTH,
+  authModeSchema,
   getAuthErrorMessage,
   signInSchema,
   signUpSchema,
@@ -99,6 +100,19 @@ describe('signInSchema', () => {
 
   test('does not apply the sign-up password length rules', () => {
     expect(signInSchema.safeParse({ ...credentials, password: 'short' }).success).toBe(true);
+  });
+});
+
+describe('authModeSchema', () => {
+  test('accepts the two modes', () => {
+    expect(authModeSchema.parse('login')).toBe('login');
+    expect(authModeSchema.parse('signup')).toBe('signup');
+  });
+
+  test('falls back to login for a missing, unknown or repeated param', () => {
+    expect(authModeSchema.parse(undefined)).toBe('login');
+    expect(authModeSchema.parse('register')).toBe('login');
+    expect(authModeSchema.parse(['signup', 'login'])).toBe('login');
   });
 });
 

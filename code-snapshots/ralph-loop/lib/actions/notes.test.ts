@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, mock, spyOn, test, type Mock } from 'bun:test';
 import * as cacheModule from 'next/cache';
 import * as authModule from '../auth';
-import { SIGN_IN_PATH, type Session } from '../auth';
+import type { Session } from '../auth';
 import { closeDb, get, run } from '../db';
 import * as notesModule from '../notes';
 import {
@@ -14,6 +14,7 @@ import {
   setNotePublic,
   type Note,
 } from '../notes';
+import { SIGN_IN_PATH } from '../routes';
 import { createNoteAction, deleteNoteAction, toggleShareAction, updateNoteAction } from './notes';
 import type { ActionResult } from './result';
 

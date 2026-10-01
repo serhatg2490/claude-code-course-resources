@@ -44,6 +44,14 @@ export const signInSchema = z.object({
 export type SignInValues = z.input<typeof signInSchema>;
 
 /**
+ * Which form `/authenticate` shows, from its `?mode=` search param.
+ * Anything missing or unknown falls back to login, so a mistyped link still lands on a working page.
+ */
+export const authModeSchema = z.enum(['login', 'signup']).catch('login');
+
+export type AuthMode = z.output<typeof authModeSchema>;
+
+/**
  * Messages per invalid field, in the shape of `z.flattenError(error).fieldErrors`.
  * The forms show the first message under each input.
  */
