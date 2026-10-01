@@ -834,3 +834,40 @@ Notes for next tasks:
 
 Next recommended steps:
 - `components/CreateNoteButton.tsx` (`createNoteAction()` → `router.push(notePath(result.data.id))`), then the note editor page
+
+---
+
+## Task: Create notes list component - 2026-10-01
+
+`components/NoteList.tsx` was built during the dashboard task. This task checked it against the steps, added the missing
+tests and verified it again in the browser.
+
+Completed:
+- Confirmed every step is covered: title, relative "Updated …" time (exact UTC in `<time dateTime>`) and a Shared/Private
+  pill per note; each card links to `notePath(id)`; responsive card grid; a "No notes yet" empty state
+- `components/NoteList.test.tsx`: 6 bun tests rendering the (synchronous, server) component with `renderToStaticMarkup`
+  from `react-dom/server`. `next/link` renders a plain `<a href>` outside the Next runtime, so no mocks are needed. Covered:
+  the empty state (no list, no links), one card per note linking to its editor in the given order, the updated time + ISO
+  `dateTime`, Shared/Private labels, escaped HTML-like titles, and a full `Note` being accepted without its `contentJson`
+  ending up in the markup
+- `package.json`: `"test": "bun test lib components"`, so `bun run test` also runs component tests (plain `bun test`
+  already found them)
+
+Verified (Playwright MCP, dev server; probe users deleted afterwards, DB back to 0 users/sessions/accounts/notes):
+- Sign-up → dashboard shows the empty state
+- With 4 seeded notes plus one owned by a second user: only the 4 are listed ("4 notes"), in `updated_at DESC` order
+  ("just now", "5 hours ago", "2 days ago", "3 months ago"); `<img src=x onerror=alert(1)>` as a title shows as plain text;
+  the long title is clamped with an ellipsis; Shared/Private pills match; hrefs are `/notes/{id}`
+- Light mode at desktop width (3 columns) and dark mode at 375px (1 column) look right; Tab reaches the cards with a
+  visible focus ring. No console errors or warnings
+- build, lint, bun test (189 tests) pass. `test:e2e` still reports "No tests found" (no playwright.config.ts yet)
+
+Notes for next tasks:
+- Synchronous server components (no `await`, no hooks needing the app router) can be unit-tested this way. Put the test
+  next to the component as `components/<Name>.test.tsx`
+- Playwright MCP can only save screenshots inside the project (`.playwright-mcp/` is gitignored; delete it afterwards)
+
+Next recommended steps:
+- `components/CreateNoteButton.tsx` (`'use client'`, `createNoteAction()` in `useTransition` → `router.push(notePath(id))`),
+  in the dashboard header and the empty state
+- Then the note editor page (`app/notes/[id]/page.tsx`) + the TipTap `NoteEditor`, the riskiest integration left

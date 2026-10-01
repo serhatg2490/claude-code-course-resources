@@ -8,7 +8,7 @@
     "start": "bun run --bun next start",
     "lint": "oxlint",
     "format": "oxfmt",
-    "test": "bun test lib",
+    "test": "bun test lib components",
     "test:vitest": "vitest",
     "test:e2e": "playwright test",
     "db:init": "bun scripts/init-db.ts"
