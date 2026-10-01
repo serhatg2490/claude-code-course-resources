@@ -910,3 +910,52 @@ Notes for next tasks:
 Next recommended steps:
 - The note editor page (`app/notes/[id]/page.tsx`: `requireAuth()`, `getNoteById()`, `notFound()`) + the TipTap `NoteEditor`,
   the riskiest integration left. Treat note props as initial values (see the updateNoteAction entry)
+
+---
+
+## Task: Build note editor page with RSC - 2026-10-01
+
+Completed:
+- `app/notes/[id]/page.tsx` (server component): `loadNote(id)` wrapped in React `cache()`, so `generateMetadata` (the tab title
+  is the note's title) and the page share one lookup. It calls `requireAuth()` first (signed out → `/authenticate`, before the id is
+  even looked at), then `z.uuid()` on the id, then `getNoteById(user.id, id)`. A malformed id, a missing note and someone else's note
+  all `notFound()`. The stored `contentJson` is parsed on the server and the editor gets only the parsed doc, never `userId`
+- `lib/note-content.ts` (new, client-safe): the TipTap doc Zod schema moved here from `lib/actions/notes.ts`, plus
+  `parseNoteContent(json): JSONContent | null` and `isTipTapDocJson()`. The server actions' `contentJsonSchema` now refines with the
+  shared `isTipTapDocJson`, so writes and reads share one definition of "a valid doc"
+- `components/NoteEditor.tsx` (`'use client'`): a basic TipTap editor, built here because the page needs something to pass the note
+  to. `useEditor` with `StarterKit.configure({ heading: { levels: [1, 2, 3] } })`, `content: initialContent` (read on mount only) and
+  `immediatelyRender: false` (TipTap's documented setting for Next.js SSR, checked via Context7). The editable element has
+  `role="textbox"`, `aria-multiline` and `aria-label="Note content"`, and `prose` / `dark:prose-invert` styles
+- `app/globals.css`: `@plugin "@tailwindcss/typography";`. The package was installed but never enabled, so `prose` did nothing
+- `lib/note-content.test.ts`: 10 tests (empty doc, attrs/marks/nesting kept, doc without content, 6 invalid inputs, `isTipTapDocJson`)
+
+Decisions:
+- Corrupt stored content (which should be impossible, since writes are validated) throws instead of opening an empty editor, so a later
+  auto-save can't overwrite the original row. That falls through to Next's default error page for now. The "navigation and error
+  handling" task can add `app/notes/[id]/error.tsx`
+- The page currently shows the title as a plain `<h1>`. The "title input" task replaces it with the controlled input
+- TipTap v3's StarterKit already includes Code, CodeBlock, HorizontalRule, BulletList (and Link/Underline). Don't add `Code` /
+  `CodeBlock` separately as SPEC.MD §9.1 shows (that's the v2 setup): TipTap would warn about duplicate extensions. Configure
+  them through `StarterKit.configure({ code: ..., codeBlock: ... })` if needed
+
+Verified (Playwright MCP, dev server; probe users deleted afterwards, DB back to 0 users/sessions/accounts/notes):
+- Signed out, `/notes/{any id}` → 307 to `/authenticate` (curl, 4 ids)
+- Signed in, a seeded note with H1, bold, italic, inline code, bullet list, horizontal rule and code block renders correctly in light
+  and dark mode, tab title "Rich probe note · Notes". Typing into a list item works. No console errors or hydration warnings
+- Another user's note, a random UUID and `not-a-uuid` → 404 (the other user's title isn't in the response). Corrupt content → 500
+- Dashboard "New note" → `/notes/{uuid}` with "Untitled note" and an empty editor (`textbox "Note content"` in the a11y tree)
+- build (`ƒ /notes/[id]`), lint, bun test (199 tests) pass. `test:e2e` still reports "No tests found" (no playwright.config.ts yet)
+
+Notes for next tasks:
+- **"Create TipTap editor component" task:** `components/NoteEditor.tsx` exists and covers useEditor/EditorContent, StarterKit,
+  heading levels 1-3 and initial content. What's left is the `onChange` callback (`onUpdate: ({ editor }) => onChange(editor.getJSON())`)
+  and settling the Code/CodeBlock step (see the decision above)
+- The page is a server component, so it can't pass `onChange`. For save/title/toolbar, add a client wrapper (e.g.
+  `components/NoteEditorForm.tsx`) that owns the title and content state and receives `{ id, title, initialContent }` from the page.
+  Keep treating props as initial values
+- `prose` adds backticks around inline `code` (Typography's default). The styling task may want `prose-code:before:content-none
+  prose-code:after:content-none`
+
+Next recommended steps:
+- `onChange` in NoteEditor ("Create TipTap editor component"), then the title input + toolbar, then save

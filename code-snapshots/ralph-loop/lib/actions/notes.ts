@@ -12,6 +12,7 @@ import {
   updateNote,
   type Note,
 } from '../notes';
+import { isTipTapDocJson } from '../note-content';
 import { DASHBOARD_PATH, notePath, publicNotePath } from '../routes';
 import type { ActionResult } from './result';
 
@@ -28,21 +29,6 @@ const titleSchema = z
   .trim()
   .max(MAX_TITLE_LENGTH, `Title must be at most ${MAX_TITLE_LENGTH} characters`)
   .transform((title) => title || DEFAULT_NOTE_TITLE);
-
-/** The shape of a TipTap document: a `doc` node whose children are typed nodes. */
-const tipTapDocSchema = z.looseObject({
-  type: z.literal('doc'),
-  content: z.array(z.looseObject({ type: z.string() })).optional(),
-});
-
-function isTipTapDocJson(value: string): boolean {
-  try {
-    const parsed: unknown = JSON.parse(value);
-    return tipTapDocSchema.safeParse(parsed).success;
-  } catch {
-    return false;
-  }
-}
 
 /** A stringified TipTap document, stored as-is in `notes.content_json`. */
 const contentJsonSchema = z
