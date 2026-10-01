@@ -4,6 +4,7 @@ import { nextCookies } from 'better-auth/next-js';
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { cache } from 'react';
+import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH } from './auth-validation';
 import { getDb } from './db';
 
 const DAY_IN_SECONDS = 60 * 60 * 24;
@@ -22,8 +23,8 @@ export function createAuth(database: Database) {
     // `secret` and `baseURL` are read from BETTER_AUTH_SECRET / BETTER_AUTH_URL (see .env.example).
     emailAndPassword: {
       enabled: true,
-      minPasswordLength: 8,
-      maxPasswordLength: 128,
+      minPasswordLength: MIN_PASSWORD_LENGTH,
+      maxPasswordLength: MAX_PASSWORD_LENGTH,
       // Sign the user in right after sign-up, so the auth page can redirect straight to /dashboard.
       autoSignIn: true,
     },

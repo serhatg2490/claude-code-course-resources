@@ -592,3 +592,42 @@ Next recommended steps:
 - The auth UI: `components/SignUpForm.tsx`, `components/LoginForm.tsx`, then `app/authenticate/page.tsx` (redirect to
   `/dashboard` on success). Right now `requireAuth()` redirects to a 404
 - Then the Header/LogoutButton, and the dashboard
+
+---
+
+## Task: Build sign up form component - 2026-10-01
+
+Completed:
+- `lib/auth-validation.ts` (client-safe, no server imports): `MIN_PASSWORD_LENGTH` / `MAX_PASSWORD_LENGTH` (now also used by
+  the better-auth config in `lib/auth.ts`, so client and server agree), Zod `emailSchema` and `signUpSchema` (name/email
+  trimmed, password not trimmed), a `FieldErrors<T>` type matching `z.flattenError().fieldErrors`, and
+  `getAuthErrorMessage(error, fallback)`, which maps known better-auth codes (USER_ALREADY_EXISTS*, INVALID_EMAIL_OR_PASSWORD,
+  PASSWORD_TOO_SHORT/LONG, …) and 429 to friendly copy and otherwise returns the fallback (no server text is echoed)
+- `components/FormField.tsx`: a labelled input with optional hint/error, wired up through `useId` + `aria-describedby` +
+  `aria-invalid`. Not a client component itself; it renders inside the client forms
+- `components/SignUpForm.tsx` (`'use client'`): controlled name/email/password inputs, `noValidate` + Zod validation on submit
+  (shows the first message per field, focuses the first invalid input, and clears a field's error as the user types),
+  `signUp.email()` inside `useTransition` (inputs and button disabled, "Creating account…"), a `role="alert"` form error for
+  server/network failures, and an `onSuccess()` prop so the parent (the `/authenticate` page) does the redirect
+- `lib/auth-validation.test.ts`: 10 tests (schema trimming/required/email/length limits, error mapping, the better-auth config
+  sharing the same password limits)
+
+Fixes along the way:
+- The error-message lookup was an object literal, so the code `"toString"` resolved to `Object.prototype.toString` and
+  returned a function. It's a `Map` now (the test for this case caught it)
+
+Verified:
+- Playwright MCP, dev server, throwaway `'use client'` probe page (deleted afterwards along with the probe user; DB back to
+  0 users/sessions/notes): empty submit → three field errors, Name focused; bad email + short password → both field errors,
+  Email focused; valid submit → `onSuccess` fired and `useSession` showed the new user; after sign-out the same email →
+  "An account with this email already exists. Try logging in instead." The only console error is the browser logging the 422
+- build, lint, bun test (158 tests) pass. `test:e2e` still reports "No tests found" (no playwright.config.ts yet)
+
+Notes for next tasks:
+- LoginForm: reuse `FormField`, `emailSchema` and `getAuthErrorMessage` (INVALID_EMAIL_OR_PASSWORD is already mapped). Add a
+  `signInSchema` to `lib/auth-validation.ts` with a non-empty password (no min length, since existing passwords shouldn't be
+  re-checked against new rules) and `autoComplete='current-password'`
+- The `/authenticate` page should `router.push('/dashboard')` and `router.refresh()` in `onSuccess`, so server components see the new cookie
+
+Next recommended steps:
+- `components/LoginForm.tsx`, then `app/authenticate/page.tsx`
