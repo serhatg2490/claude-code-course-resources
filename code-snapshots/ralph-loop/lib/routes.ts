@@ -8,3 +8,13 @@ export const SIGN_IN_PATH = '/authenticate';
 
 /** The signed-in home: where users land after logging in or signing up. */
 export const DASHBOARD_PATH = '/dashboard';
+
+/** The editor for one of the signed-in user's notes. */
+export function notePath(noteId: string): string {
+  return `/notes/${noteId}`;
+}
+
+/** The anonymous, read-only page for a shared note. */
+export function publicNotePath(slug: string): string {
+  return `/p/${slug}`;
+}

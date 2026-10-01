@@ -12,7 +12,7 @@ import {
   updateNote,
   type Note,
 } from '../notes';
-import { DASHBOARD_PATH } from '../routes';
+import { DASHBOARD_PATH, notePath, publicNotePath } from '../routes';
 import type { ActionResult } from './result';
 
 const NOT_FOUND_ERROR = 'Note not found';
@@ -203,7 +203,7 @@ export async function toggleShareAction(
   revalidateNote(note);
   if (previous.publicSlug && previous.publicSlug !== note.publicSlug) {
     // The note is no longer public: stop serving the old public page from cache.
-    revalidatePath(`/p/${previous.publicSlug}`);
+    revalidatePath(publicNotePath(previous.publicSlug));
   }
   return { success: true, data: note };
 }
@@ -214,8 +214,8 @@ export async function toggleShareAction(
  */
 function revalidateNote(note: Note) {
   revalidatePath(DASHBOARD_PATH);
-  revalidatePath(`/notes/${note.id}`);
+  revalidatePath(notePath(note.id));
   if (note.publicSlug) {
-    revalidatePath(`/p/${note.publicSlug}`);
+    revalidatePath(publicNotePath(note.publicSlug));
   }
 }

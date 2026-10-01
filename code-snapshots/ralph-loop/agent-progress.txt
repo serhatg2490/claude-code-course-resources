@@ -786,3 +786,51 @@ Notes for next tasks:
 Next recommended steps:
 - The dashboard: `app/dashboard/page.tsx` (`requireAuth()`, `getNotesByUser()`), `components/NoteList.tsx`,
   `components/CreateNoteButton.tsx`. Every successful login still lands on a 404 until then
+
+---
+
+## Task: Build dashboard page with RSC data fetching - 2026-10-01
+
+Completed:
+- `app/dashboard/page.tsx` (server component, title "Your notes"): `requireAuth()` (redirects to `/authenticate` when
+  signed out), then `getNotesByUser(user.id)` straight from the repository, with no action/API round trip. Renders a heading,
+  a "N notes, most recently updated first." line when there are notes, and `<NoteList notes={notes} now={new Date()} />`
+- `components/NoteList.tsx`: built here because the page needs it to show anything. It's a **server** component (CLAUDE.md:
+  server components by default). Nothing in it is interactive, so it doesn't need to be the "client component" the PRD step
+  mentions, and the note content never gets serialized to the browser. Props: `notes: NoteSummary[]` (`Pick<Note, 'id' |
+  'title' | 'updatedAt' | 'isPublic'>`, per SPEC.MD §8.3, which a full `Note` satisfies) and `now`. Card grid (1/2/3 columns),
+  each card is a link to `/notes/{id}` with a 2-line clamped title, "Updated <time>" and a "Shared"/"Private" pill. An empty list
+  renders a dashed "No notes yet" section (this is the dashboard's empty state)
+- `lib/dates.ts` (client-safe): `parseSqliteTimestamp()` (SQLite `datetime('now')` → UTC `Date`; `new Date()` on the raw string
+  would read it as local time) and `formatRelativeTime(date, now)` ("just now", "5 minutes ago", "yesterday", "last month", via
+  `Intl.RelativeTimeFormat`). The `<time dateTime>` carries the exact ISO timestamp
+- `lib/routes.ts`: `notePath(id)` and `publicNotePath(slug)`. `lib/actions/notes.ts` now uses them for `revalidatePath`
+  instead of inline template strings
+- `lib/dates.test.ts`: 18 tests (UTC parsing, every unit boundary, clock skew, parsed SQLite input)
+
+Decisions:
+- Relative times instead of formatted dates: the page is server-rendered, and the server doesn't know the visitor's time
+  zone. "3 hours ago" is right everywhere, and a formatted absolute time would be off for most users. `now` is a prop, so
+  `NoteList` stays pure and deterministic
+- Every card shows a status ("Shared" or "Private") rather than only marking shared notes, as SPEC.MD §3.2 asks for "shared status"
+
+Verified (Playwright MCP, dev server; probe users deleted afterwards, DB back to 0 users/sessions/accounts/notes):
+- Signed out, `/dashboard` → 307 to `/authenticate`
+- Sign-up lands on `/dashboard` (no more 404) with the "No notes yet" empty state
+- With 4 seeded notes (plus one owned by a second user): only the user's 4 are listed, in `updated_at DESC` order, showing "just now",
+  "3 hours ago", "2 days ago", "3 months ago" and correct ISO `dateTime`s. The long title is clamped to two lines. The shared note shows
+  "Shared", the others "Private". Links point to `/notes/{id}`, and the focus outline shows on keyboard focus
+- Light mode at desktop width (3-column grid) and dark mode at 375px (single column) both look right. No console errors or warnings
+- build, lint, bun test (183 tests) pass. `test:e2e` still reports "No tests found" (no playwright.config.ts yet)
+
+Notes for next tasks:
+- **"Create notes list component" task:** `components/NoteList.tsx` already covers every step (title/updated/status, links,
+  cards, empty message). What's left is confirming it and marking it done
+- Clicking a card still 404s until `app/notes/[id]/page.tsx` exists
+- CreateNoteButton: put it next to the "Your notes" heading (the header `div` in the page) and, ideally, in the empty
+  state too. The empty-state copy already says "Create one to start writing"
+- To seed notes for a probe user, insert into `data/app.db` with explicit `updated_at` values in SQLite format
+  (`YYYY-MM-DD HH:MM:SS`, UTC)
+
+Next recommended steps:
+- `components/CreateNoteButton.tsx` (`createNoteAction()` → `router.push(notePath(result.data.id))`), then the note editor page
