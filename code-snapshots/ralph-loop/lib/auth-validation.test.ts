@@ -4,6 +4,7 @@ import {
   MAX_PASSWORD_LENGTH,
   MIN_PASSWORD_LENGTH,
   getAuthErrorMessage,
+  signInSchema,
   signUpSchema,
 } from './auth-validation';
 
@@ -64,6 +65,40 @@ describe('signUpSchema', () => {
 
   test('rejects an overly long name', () => {
     expect(fieldErrorsFor({ ...valid, name: 'a'.repeat(101) }).name).toHaveLength(1);
+  });
+});
+
+describe('signInSchema', () => {
+  const credentials = { email: 'ada@example.com', password: 'correct-horse' };
+
+  function signInErrorsFor(input: unknown) {
+    const parsed = signInSchema.safeParse(input);
+    expect(parsed.success).toBe(false);
+    return parsed.success ? {} : z.flattenError(parsed.error).fieldErrors;
+  }
+
+  test('accepts valid input, trims the email and keeps spaces in the password', () => {
+    expect(signInSchema.parse({ email: ' ada@example.com ', password: ' spaced ' })).toEqual({
+      email: 'ada@example.com',
+      password: ' spaced ',
+    });
+  });
+
+  test('requires both fields', () => {
+    expect(signInErrorsFor({ email: ' ', password: '' })).toEqual({
+      email: ['Enter your email'],
+      password: ['Enter your password'],
+    });
+  });
+
+  test('rejects a malformed email', () => {
+    expect(signInErrorsFor({ ...credentials, email: 'ada' }).email).toEqual([
+      'Enter a valid email address',
+    ]);
+  });
+
+  test('does not apply the sign-up password length rules', () => {
+    expect(signInSchema.safeParse({ ...credentials, password: 'short' }).success).toBe(true);
   });
 });
 

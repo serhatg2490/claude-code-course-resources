@@ -631,3 +631,39 @@ Notes for next tasks:
 
 Next recommended steps:
 - `components/LoginForm.tsx`, then `app/authenticate/page.tsx`
+
+---
+
+## Task: Build login form component - 2026-10-01
+
+Completed:
+- `components/LoginForm.tsx` (`'use client'`): controlled email/password inputs, `noValidate` + Zod validation on submit
+  (first message per field, focuses the first invalid input, clears a field's error as the user types), `signIn.email()`
+  inside `useTransition` (inputs and button disabled, "Logging in…"), a `role="alert"` form error for failed sign-ins and
+  network errors, and an `onSuccess()` prop so the parent (the `/authenticate` page) does the redirect. After a failed
+  attempt the email is kept and the password is cleared
+- `lib/auth-validation.ts`: `signInSchema` / `SignInValues`. Email reuses `emailSchema` (trimmed); the password is only
+  required (`Enter your password`), with no length rules, so existing passwords aren't re-checked against sign-up rules
+- Shared form pieces pulled out of `SignUpForm` so both forms use them: `components/FormError.tsx` (the alert),
+  `components/SubmitButton.tsx` (pending label + disabled) and `lib/forms.ts` (`focusFirstInvalidField`, client-safe)
+- `lib/auth-validation.test.ts`: 4 new `signInSchema` tests (trimming/spaces kept in password, both fields required,
+  malformed email, no sign-up length rules)
+
+Decisions:
+- Wrong password and unknown email both show "Incorrect email or password" (better-auth returns the same
+  INVALID_EMAIL_OR_PASSWORD for both), so the form doesn't reveal which emails have accounts
+
+Verified:
+- Playwright MCP, dev server, throwaway `'use client'` probe page with both forms (deleted afterwards along with the probe
+  user; DB back to 0 users/sessions/accounts/notes): empty submit → both field errors, Email focused; bad email → only the
+  email error (a short password is accepted); unknown account → "Incorrect email or password", email kept, password cleared;
+  the refactored SignUpForm still created an account and fired `onSuccess`; after sign-out, wrong password → same generic
+  error; padded email + correct password → "Logging in…" with inputs disabled, then `onSuccess` fired, `useSession` showed
+  the user and the stale alert was gone. The only console errors are the browser logging the two 401s
+- build, lint, bun test (162 tests) pass. `test:e2e` still reports "No tests found" (no playwright.config.ts yet)
+
+Next recommended steps:
+- `app/authenticate/page.tsx`: toggle between `LoginForm` and `SignUpForm` (login first; a `?mode=signup` search param
+  would let the landing page/Header link straight to sign-up), `onSuccess` → `router.push('/dashboard')` +
+  `router.refresh()`. If already signed in, redirect to `/dashboard` on the server via `getSession()`
+- Then the Header + LogoutButton

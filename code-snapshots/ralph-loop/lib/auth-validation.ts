@@ -35,6 +35,14 @@ export const signUpSchema = z.object({
 
 export type SignUpValues = z.input<typeof signUpSchema>;
 
+export const signInSchema = z.object({
+  email: emailSchema,
+  // Only required, not length-checked: existing passwords shouldn't be re-validated against today's sign-up rules.
+  password: z.string().min(1, 'Enter your password'),
+});
+
+export type SignInValues = z.input<typeof signInSchema>;
+
 /**
  * Messages per invalid field, in the shape of `z.flattenError(error).fieldErrors`.
  * The forms show the first message under each input.
