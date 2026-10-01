@@ -871,3 +871,42 @@ Next recommended steps:
 - `components/CreateNoteButton.tsx` (`'use client'`, `createNoteAction()` in `useTransition` → `router.push(notePath(id))`),
   in the dashboard header and the empty state
 - Then the note editor page (`app/notes/[id]/page.tsx`) + the TipTap `NoteEditor`, the riskiest integration left
+
+---
+
+## Task: Add create note button to dashboard - 2026-10-01
+
+Completed:
+- `components/CreateNoteButton.tsx` (`'use client'`): calls `createNoteAction()` with no input (an "Untitled note" with an empty
+  doc) inside `useTransition`, then `router.push(notePath(id))`. The push runs inside the transition, so the button stays
+  disabled ("Creating…") until the navigation starts. A double click creates exactly one note. A failed result or a network
+  error (the action call throws) shows a `role="alert"` message under the button and re-enables it
+- `app/dashboard/page.tsx`: the button sits at the right of the "Your notes" header. The header row is `flex-wrap`, and the
+  heading block is `flex-1 basis-48`, so on narrow screens the button (and its error) wrap below the heading, right-aligned
+  (`ml-auto`), instead of squeezing it
+
+Decisions:
+- One button, in the header only, not repeated in the empty state: two identical "New note" buttons on an empty dashboard are
+  redundant for screen readers, and the header button is right above the empty-state copy
+- No unit test: the component is interaction-only (`useRouter` + a server action), and bun test has no DOM environment. The
+  behavior was verified in the browser, and "Write E2E tests for notes CRUD" covers creating from the dashboard
+
+Verified (Playwright MCP, dev server; probe user deleted afterwards, DB back to 0 users/sessions/accounts/notes):
+- Sign-up → empty dashboard → "New note" → "Creating…" (disabled) → `/notes/{uuid}` (404 until the editor page exists). The DB row
+  is "Untitled note" with the empty doc, owned by the user
+- Double click → exactly one more note. Back on the dashboard, the new notes are listed
+- Server action POST aborted through `page.route` → "Could not create the note. Please try again.", still on `/dashboard`, button
+  enabled. Retry → navigated to the new note
+- Cookies cleared, then click → redirected to `/authenticate` (`requireAuth()` in the action), with no stray error
+- Light at 1280px and dark at 375px look right, error state included. Console: only the expected `/notes/{id}` 404s and the
+  deliberately aborted request
+- build, lint, bun test (189 tests) pass. `test:e2e` still reports "No tests found" (no playwright.config.ts yet)
+
+Notes for next tasks:
+- Right after `page.emulateMedia({ colorScheme: 'dark' })`, screenshots can catch the `transition-colors` mid-fade (grey cards).
+  Wait ~300ms or navigate after switching before judging dark-mode colors
+- Clicking "New note" or a card still lands on a 404 until `app/notes/[id]/page.tsx` exists
+
+Next recommended steps:
+- The note editor page (`app/notes/[id]/page.tsx`: `requireAuth()`, `getNoteById()`, `notFound()`) + the TipTap `NoteEditor`,
+  the riskiest integration left. Treat note props as initial values (see the updateNoteAction entry)
