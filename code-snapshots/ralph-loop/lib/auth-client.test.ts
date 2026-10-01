@@ -85,4 +85,38 @@ describe('against the auth route', () => {
     expect(error).toBeNull();
     expect(data).toBeNull();
   });
+
+  test('signOut revokes the session', async () => {
+    const cookie = await signUpForSessionCookie();
+    const withCookie = { ...fetchOptions, headers: { cookie } };
+    const before = await authClient.getSession({ fetchOptions: withCookie });
+    expect(before.data?.user.email).toBe(credentials.email);
+
+    const { data, error } = await signOut({ fetchOptions: withCookie });
+
+    expect(error).toBeNull();
+    expect(data).toEqual({ success: true });
+    expect(db.query('SELECT id FROM session').all()).toEqual([]);
+    const after = await authClient.getSession({ fetchOptions: withCookie });
+    expect(after.data).toBeNull();
+  });
 });
+
+/** Signs up through the client and returns the session cookie (`name=value`) the server set. */
+async function signUpForSessionCookie(): Promise<string> {
+  let cookie: string | undefined;
+  await signUp.email({
+    ...credentials,
+    fetchOptions: {
+      ...fetchOptions,
+      onResponse: ({ response }) => {
+        cookie = response.headers
+          .getSetCookie()
+          .map((header) => header.split(';')[0])
+          .find((pair) => pair.startsWith('better-auth.session_token='));
+      },
+    },
+  });
+  if (!cookie) throw new Error('Sign-up did not set a session cookie');
+  return cookie;
+}

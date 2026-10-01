@@ -751,3 +751,38 @@ Notes for next tasks:
 Next recommended steps:
 - The dashboard: `app/dashboard/page.tsx` (`requireAuth()`, `getNotesByUser()`), `components/NoteList.tsx`,
   `components/CreateNoteButton.tsx`, so the post-login redirect stops 404ing
+
+---
+
+## Task: Implement logout functionality - 2026-10-01
+
+The LogoutButton was built during the Header task. This task checked it against the steps and added the missing test.
+
+Completed:
+- Confirmed every step is covered by `components/LogoutButton.tsx` (`'use client'`, `signOut()` from the auth client,
+  `router.replace('/')` + `router.refresh()`, a `role="alert"` message on failure) and its place in `components/Header.tsx`
+- `lib/auth-client.test.ts`: a new `signOut revokes the session` test. It signs up through the real client, captures the
+  session cookie from the `Set-Cookie` header (`signUpForSessionCookie()` helper, through `fetchOptions.onResponse`),
+  checks the cookie resolves to the user, then calls `signOut` with it: `{ success: true }`, no session rows left, and
+  `getSession` with the same cookie → null. This guards the 415 trap noted earlier (sign-out needs a JSON body), since it
+  exercises the client's real request
+
+Verified (Playwright MCP, dev server; probe user deleted afterwards, DB back to 0 users/sessions/accounts/notes):
+- Sign up via the UI → header shows the email + "Log out". Click "Log out" → landed on `/`, header back to "Log in" / "Sign up",
+  the `better-auth.session_token` cookie is gone, and replaying the old token against `/api/auth/get-session` → `null`
+  (revoked on the server, not just cleared in the browser). Session rows: 0
+- `/authenticate` loads normally again after logout (no redirect to the dashboard)
+- Failure path: with `/api/auth/sign-out` aborted through `page.route`, clicking "Log out" shows "Could not log you out. Please
+  try again." The user stays on the page with the cookie and an enabled button. After the route was restored, a retry logged out
+  normally
+- Console: only the expected `/dashboard` 404s, the deliberately aborted sign-out, and the scaffold landing page's image warning
+- build, lint, bun test (165 tests) pass. `test:e2e` still reports "No tests found" (no playwright.config.ts yet)
+
+Notes for next tasks:
+- To act as a signed-in user in bun tests without a cookie jar, reuse the `signUpForSessionCookie()` pattern: capture `Set-Cookie`
+  in `onResponse`, then pass `headers: { cookie }` in `fetchOptions`
+- Stop the dev server by port: `kill $(lsof -ti tcp:3000 -sTCP:LISTEN)`
+
+Next recommended steps:
+- The dashboard: `app/dashboard/page.tsx` (`requireAuth()`, `getNotesByUser()`), `components/NoteList.tsx`,
+  `components/CreateNoteButton.tsx`. Every successful login still lands on a 404 until then
