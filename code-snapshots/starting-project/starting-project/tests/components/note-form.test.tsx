@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { NoteForm } from '@/components/note-form';
 import type { NoteFormState } from '@/lib/note-schemas';
@@ -29,6 +29,20 @@ function contentInput(): HTMLInputElement {
   return document.querySelector('input[name="contentJson"]')!;
 }
 
+function shareCheckbox(): HTMLInputElement {
+  return screen.getByRole('checkbox') as HTMLInputElement;
+}
+
+// jsdom doesn't implement modal dialogs; toggling `open` is all these tests rely on.
+beforeEach(() => {
+  HTMLDialogElement.prototype.showModal = function (this: HTMLDialogElement) {
+    this.open = true;
+  };
+  HTMLDialogElement.prototype.close = function (this: HTMLDialogElement) {
+    this.open = false;
+  };
+});
+
 describe('NoteForm', () => {
   it('starts with the initial values and an empty doc', () => {
     renderForm({ initialTitle: 'Groceries' });
@@ -45,10 +59,38 @@ describe('NoteForm', () => {
     });
   });
 
-  it('explains that a link is created when sharing a new note', () => {
+  it('asks for confirmation before enabling sharing', () => {
     renderForm();
-    fireEvent.click(screen.getByRole('checkbox'));
+    fireEvent.click(shareCheckbox());
+    expect(screen.getByRole('dialog', { name: 'Share this note publicly?' })).toBeTruthy();
+    expect(shareCheckbox().checked).toBe(false);
+  });
+
+  it('keeps sharing off when the confirmation is cancelled', async () => {
+    const action = renderForm();
+    fireEvent.click(shareCheckbox());
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(shareCheckbox().checked).toBe(false);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await vi.waitFor(() => expect(action).toHaveBeenCalled());
+    expect(action.mock.calls[0][1].get('isPublic')).toBeNull();
+  });
+
+  it('enables sharing once confirmed and explains a link will be created', async () => {
+    const action = renderForm();
+    fireEvent.click(shareCheckbox());
+    fireEvent.click(screen.getByRole('button', { name: 'Share publicly' }));
+
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(shareCheckbox().checked).toBe(true);
     expect(screen.getByText('A public link will be created when you save.')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await vi.waitFor(() => expect(action).toHaveBeenCalled());
+    expect(action.mock.calls[0][1].get('isPublic')).toBe('on');
   });
 
   it('shows the existing share link for a shared note', () => {
@@ -56,9 +98,11 @@ describe('NoteForm', () => {
     expect(screen.getByRole('link', { name: '/p/slug42' })).toBeTruthy();
   });
 
-  it('warns that unsharing disables the current link', () => {
+  it('warns that unsharing disables the current link, without confirmation', () => {
     renderForm({ initialIsPublic: true, publicSlug: 'slug42' });
-    fireEvent.click(screen.getByRole('checkbox'));
+    fireEvent.click(shareCheckbox());
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(shareCheckbox().checked).toBe(false);
     expect(screen.getByText('Saving will disable the current public link.')).toBeTruthy();
   });
 

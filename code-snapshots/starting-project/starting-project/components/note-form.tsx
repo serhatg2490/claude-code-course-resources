@@ -1,7 +1,7 @@
 'use client';
 
 import type { JSONContent } from '@tiptap/react';
-import { useActionState, useState } from 'react';
+import { useActionState, useRef, useState } from 'react';
 
 import { RichTextEditor } from '@/components/rich-text-editor';
 import { ShareLink } from '@/components/share-link';
@@ -38,6 +38,7 @@ export function NoteForm({
   // Controlled so React's automatic post-action form reset can't wipe it on error.
   const [title, setTitle] = useState(initialTitle);
   const [isPublic, setIsPublic] = useState(initialIsPublic);
+  const shareDialogRef = useRef<HTMLDialogElement>(null);
   const [contentJson, setContentJson] = useState(() =>
     initialContent ? JSON.stringify(initialContent) : EMPTY_DOC_JSON,
   );
@@ -47,7 +48,17 @@ export function NoteForm({
   }
 
   function handlePublicChange(event: React.ChangeEvent<HTMLInputElement>) {
-    setIsPublic(event.target.checked);
+    // Enabling sharing waits for confirmation; the controlled checkbox stays unchecked until then.
+    if (event.target.checked) {
+      shareDialogRef.current?.showModal();
+    } else {
+      setIsPublic(false);
+    }
+  }
+
+  function handleConfirmShare() {
+    setIsPublic(true);
+    shareDialogRef.current?.close();
   }
 
   function handleContentChange(content: JSONContent) {
@@ -131,6 +142,37 @@ export function NoteForm({
           {isPublic && !publicSlug && 'A public link will be created when you save.'}
           {!isPublic && publicSlug && 'Saving will disable the current public link.'}
         </div>
+
+        <dialog
+          ref={shareDialogRef}
+          aria-labelledby='share-dialog-heading'
+          className='m-auto w-[calc(100%-2rem)] max-w-md rounded-lg border border-neutral-200 bg-background p-6 text-foreground shadow-xl backdrop:bg-black/50 dark:border-neutral-800'
+        >
+          <h2 id='share-dialog-heading' className='text-lg font-semibold'>
+            Share this note publicly?
+          </h2>
+          <p className='mt-2 text-sm text-neutral-500'>
+            Anyone with the link will be able to view this note. You can turn sharing off at any
+            time.
+          </p>
+          <div className='mt-6 flex justify-end gap-2'>
+            <button
+              type='button'
+              autoFocus
+              onClick={() => shareDialogRef.current?.close()}
+              className='rounded-md border border-neutral-300 px-3 py-1.5 text-sm font-medium transition-colors hover:bg-neutral-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-link dark:border-neutral-700 dark:hover:bg-neutral-900'
+            >
+              Cancel
+            </button>
+            <button
+              type='button'
+              onClick={handleConfirmShare}
+              className='rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-link'
+            >
+              Share publicly
+            </button>
+          </div>
+        </dialog>
       </fieldset>
 
       <div className='flex justify-end'>
