@@ -1,4 +1,4 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 
 :root {
   --background: #ffffff;
@@ -23,4 +23,44 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+/* TipTap editor content — minimal typography without @tailwindcss/typography. */
+@layer components {
+  .rich-text > * + * {
+    @apply mt-3;
+  }
+  .rich-text h1 {
+    @apply text-3xl font-semibold tracking-tight;
+  }
+  .rich-text h2 {
+    @apply text-2xl font-semibold tracking-tight;
+  }
+  .rich-text h3 {
+    @apply text-xl font-semibold;
+  }
+  .rich-text ul {
+    @apply list-disc pl-6;
+  }
+  .rich-text ol {
+    @apply list-decimal pl-6;
+  }
+  .rich-text li + li {
+    @apply mt-1;
+  }
+  .rich-text blockquote {
+    @apply border-l-4 border-neutral-300 pl-4 text-neutral-600 dark:border-neutral-700 dark:text-neutral-400;
+  }
+  .rich-text code {
+    @apply rounded bg-neutral-100 px-1 py-0.5 font-mono text-sm dark:bg-neutral-800;
+  }
+  .rich-text pre {
+    @apply overflow-x-auto rounded-md bg-neutral-100 p-3 dark:bg-neutral-900;
+  }
+  .rich-text pre code {
+    @apply bg-transparent p-0;
+  }
+  .rich-text hr {
+    @apply my-6 border-neutral-300 dark:border-neutral-700;
+  }
 }

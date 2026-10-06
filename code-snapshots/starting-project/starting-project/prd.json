@@ -1,0 +1,401 @@
+[
+  {
+    "category": "setup",
+    "description": "Initialize Next.js app with Bun and TypeScript",
+    "steps": [
+      "Scaffold Next.js (App Router) project using Bun as package manager and runtime",
+      "Enable TypeScript strict mode and configure @/* path alias to project root",
+      "Install core dependencies: better-auth, @tiptap/react, @tiptap/pm, @tiptap/starter-kit, nanoid, zod",
+      "Add .env.example with BETTER_AUTH_SECRET and BETTER_AUTH_URL",
+      "Add data/ directory to .gitignore",
+      "Verify bun dev starts and bun run build succeeds"
+    ],
+    "passes": false
+  },
+  {
+    "category": "setup",
+    "description": "Set up Tailwind CSS with typography plugin",
+    "steps": [
+      "Install and configure Tailwind CSS with PostCSS",
+      "Install @tailwindcss/typography and enable it for prose styling",
+      "Import Tailwind in app/globals.css with a neutral base background",
+      "Verify a Tailwind utility class renders correctly on the home page"
+    ],
+    "passes": false
+  },
+  {
+    "category": "database",
+    "description": "Create database access module (lib/db.ts)",
+    "steps": [
+      "Create lib/db.ts using Bun's SQLite client pointing to data/app.db",
+      "Ensure data/ directory is created if missing",
+      "Implement getDb() returning a singleton connection",
+      "Enable foreign keys and WAL mode on connection",
+      "Implement typed helpers query<T>(sql, params?), get<T>(sql, params?), run(sql, params?)",
+      "Verify helpers execute a simple SELECT 1 query"
+    ],
+    "passes": false
+  },
+  {
+    "category": "database",
+    "description": "Create SQLite schema init script with better-auth tables",
+    "steps": [
+      "Create scripts/init-db.ts that runs idempotent CREATE TABLE IF NOT EXISTS statements",
+      "Create user table with id, name, email (unique), emailVerified, image, timestamps",
+      "Create session table with userId foreign key, unique token, expiresAt, ipAddress, userAgent, timestamps",
+      "Create account table with userId foreign key, accountId, providerId, token fields, password, timestamps",
+      "Create verification table with identifier, value, expiresAt, timestamps",
+      "Add db:init script to package.json",
+      "Verify all tables exist with correct structure after running the script"
+    ],
+    "passes": false
+  },
+  {
+    "category": "database",
+    "description": "Create notes table and indexes",
+    "steps": [
+      "Add notes table to init script: id, user_id, title, content_json, is_public, public_slug (unique), created_at, updated_at",
+      "Add foreign key user_id -> user(id)",
+      "Create idx_notes_user_id, idx_notes_public_slug, idx_notes_is_public indexes",
+      "Verify notes table and all three indexes exist"
+    ],
+    "passes": false
+  },
+  {
+    "category": "auth",
+    "description": "Configure better-auth server (lib/auth.ts)",
+    "steps": [
+      "Create lib/auth.ts with betterAuth configuration",
+      "Configure SQLite database adapter using Bun SQLite (data/app.db)",
+      "Enable email/password (credential) authentication with minimum password length",
+      "Configure session expiration and cookie settings",
+      "Add Next.js cookies plugin for server action support",
+      "Export auth instance"
+    ],
+    "passes": false
+  },
+  {
+    "category": "auth",
+    "description": "Mount better-auth API route handler",
+    "steps": [
+      "Create app/api/auth/[...all]/route.ts",
+      "Export GET and POST handlers from better-auth's Next.js integration",
+      "Verify /api/auth/get-session responds without errors"
+    ],
+    "passes": false
+  },
+  {
+    "category": "auth",
+    "description": "Create better-auth client (lib/auth-client.ts)",
+    "steps": [
+      "Create lib/auth-client.ts using createAuthClient from better-auth/react",
+      "Export signIn, signUp, signOut and useSession helpers",
+      "Verify client imports compile in a client component"
+    ],
+    "passes": false
+  },
+  {
+    "category": "auth",
+    "description": "Create server-side session helpers",
+    "steps": [
+      "Create lib/session.ts with getSession() reading headers via auth.api.getSession",
+      "Add getCurrentUser() returning user or null",
+      "Add requireUser() that redirects to /login when unauthenticated (for pages)",
+      "Add API helper that returns 401 JSON response when unauthenticated",
+      "Mark module server-only"
+    ],
+    "passes": false
+  },
+  {
+    "category": "ui",
+    "description": "Build sign up form component",
+    "steps": [
+      "Create components/SignUpForm.tsx client component",
+      "Add name, email, password inputs with accessible labels",
+      "Add client-side validation (required name, email format, password length)",
+      "Integrate with auth client signUp.email method",
+      "Display error messages on failure and disable submit while pending",
+      "Redirect to /dashboard on success"
+    ],
+    "passes": false
+  },
+  {
+    "category": "ui",
+    "description": "Build login form component",
+    "steps": [
+      "Create components/LoginForm.tsx client component",
+      "Add email and password inputs with accessible labels",
+      "Add client-side validation (email format, required password)",
+      "Integrate with auth client signIn.email method",
+      "Display error messages on failure and disable submit while pending",
+      "Redirect to /dashboard on success"
+    ],
+    "passes": false
+  },
+  {
+    "category": "ui",
+    "description": "Create login and register pages",
+    "steps": [
+      "Create app/(auth)/login/page.tsx rendering LoginForm",
+      "Create app/(auth)/register/page.tsx rendering SignUpForm",
+      "Add links between login and register pages",
+      "Redirect already-authenticated users to /dashboard",
+      "Verify full sign up -> dashboard and login -> dashboard flows"
+    ],
+    "passes": false
+  },
+  {
+    "category": "auth",
+    "description": "Protect authenticated routes",
+    "steps": [
+      "Add Next.js proxy/middleware that checks the better-auth session cookie",
+      "Redirect unauthenticated requests for /dashboard and /notes/* to /login",
+      "Leave /, /login, /register, /p/* and /api/auth/* publicly accessible",
+      "Keep server-side requireUser() checks in protected pages as the authoritative check",
+      "Verify unauthenticated access to /dashboard redirects to /login"
+    ],
+    "passes": false
+  },
+  {
+    "category": "ui",
+    "description": "Build global layout header with auth state",
+    "steps": [
+      "Update app/layout.tsx with header containing app name linking to /",
+      "Show Log in / Sign up links when unauthenticated",
+      "Show user name, Dashboard link and Log out button when authenticated",
+      "Create components/LogoutButton.tsx client component calling signOut and redirecting to /",
+      "Verify header updates correctly after login and logout"
+    ],
+    "passes": false
+  },
+  {
+    "category": "notes",
+    "description": "Create note types and read/create repository functions (lib/notes.ts)",
+    "steps": [
+      "Create lib/notes.ts with Note type (id, userId, title, contentJson, isPublic, publicSlug, createdAt, updatedAt)",
+      "Add row mapper converting snake_case DB rows to Note (is_public integer -> boolean)",
+      "Implement createNote(userId, data) with default title 'Untitled note' and empty TipTap doc",
+      "Implement getNoteById(userId, noteId) filtered by user_id",
+      "Implement getNotesByUser(userId) ordered by updated_at desc",
+      "Verify functions with a quick script or test"
+    ],
+    "passes": false
+  },
+  {
+    "category": "notes",
+    "description": "Implement note update and delete repository functions",
+    "steps": [
+      "Implement updateNote(userId, noteId, data) updating only provided fields",
+      "Auto-set updated_at to current timestamp on update",
+      "Return null when note not found or not owned by user",
+      "Implement deleteNote(userId, noteId) as hard delete scoped by user_id",
+      "Verify a user cannot update or delete another user's note"
+    ],
+    "passes": false
+  },
+  {
+    "category": "notes",
+    "description": "Implement sharing repository functions",
+    "steps": [
+      "Implement setNotePublic(userId, noteId, isPublic)",
+      "Generate a 16+ char nanoid slug when enabling and no slug exists",
+      "Set is_public = 0 and public_slug = NULL when disabling",
+      "Implement getNoteByPublicSlug(slug) returning note only when is_public = 1",
+      "Verify disabled notes are not returned by slug lookup"
+    ],
+    "passes": false
+  },
+  {
+    "category": "api",
+    "description": "Implement GET and POST /api/notes",
+    "steps": [
+      "Create app/api/notes/route.ts",
+      "Return 401 when unauthenticated",
+      "GET: return list of { id, title, isPublic, updatedAt } for current user (omit contentJson)",
+      "POST: validate body with zod (optional title, optional contentJson object)",
+      "POST: create note with defaults and return 201 with created note",
+      "Return 400 on invalid body and handle DB errors gracefully with 500"
+    ],
+    "passes": false
+  },
+  {
+    "category": "api",
+    "description": "Implement GET, PUT and DELETE /api/notes/[id]",
+    "steps": [
+      "Create app/api/notes/[id]/route.ts",
+      "Return 401 when unauthenticated",
+      "GET: return full note with parsed contentJson, 404 if not found or not owned",
+      "PUT: validate body with zod, stringify contentJson, update note, return 200 or 404",
+      "DELETE: hard delete, return 204 on success or 404 if not found",
+      "Verify cross-user access returns 404"
+    ],
+    "passes": false
+  },
+  {
+    "category": "api",
+    "description": "Implement POST /api/notes/[id]/share",
+    "steps": [
+      "Create app/api/notes/[id]/share/route.ts",
+      "Return 401 when unauthenticated",
+      "Validate body { isPublic: boolean } with zod",
+      "Call setNotePublic and return { id, isPublic, publicSlug }",
+      "Return 404 if note not found or not owned"
+    ],
+    "passes": false
+  },
+  {
+    "category": "api",
+    "description": "Implement GET /api/public-notes/[slug]",
+    "steps": [
+      "Create app/api/public-notes/[slug]/route.ts (no auth required)",
+      "Return only { title, contentJson } for public notes",
+      "Return 404 when slug not found or note is not public",
+      "Verify no owner or private data is leaked in the response"
+    ],
+    "passes": false
+  },
+  {
+    "category": "editor",
+    "description": "Build TipTap NoteEditor component",
+    "steps": [
+      "Create components/NoteEditor.tsx client component using useEditor and EditorContent",
+      "Configure StarterKit with heading levels 1-3, plus inline code and code block (avoid duplicate extension registration)",
+      "Accept initial content (TipTap JSON) and onChange callback props",
+      "Emit editor.getJSON() via onChange on every update",
+      "Set immediatelyRender: false to avoid SSR hydration mismatches",
+      "Style editor content with Tailwind prose classes"
+    ],
+    "passes": false
+  },
+  {
+    "category": "editor",
+    "description": "Build editor toolbar",
+    "steps": [
+      "Create components/EditorToolbar.tsx receiving the editor instance",
+      "Add buttons: Bold, Italic, H1, H2, H3, Paragraph, Bullet list, Inline code, Code block, Horizontal rule",
+      "Each button calls editor.chain().focus().<command>().run()",
+      "Show active state for active marks/nodes (aria-pressed)",
+      "Ensure buttons are keyboard accessible with labels",
+      "Integrate toolbar into NoteEditor"
+    ],
+    "passes": false
+  },
+  {
+    "category": "ui",
+    "description": "Build NoteList component",
+    "steps": [
+      "Create components/NoteList.tsx accepting notes: { id, title, updatedAt, isPublic }[]",
+      "Render each note as a link to /notes/[id]",
+      "Show title, formatted last updated time and shared badge",
+      "Render empty state when no notes exist"
+    ],
+    "passes": false
+  },
+  {
+    "category": "ui",
+    "description": "Build dashboard page",
+    "steps": [
+      "Create app/dashboard/page.tsx as server component",
+      "Require authenticated user on server (requireUser)",
+      "Fetch notes via getNotesByUser and render NoteList",
+      "Add 'Create note' button that POSTs /api/notes (or server action) and navigates to /notes/[id]",
+      "Verify new note appears in list with default title"
+    ],
+    "passes": false
+  },
+  {
+    "category": "ui",
+    "description": "Build note editor page (/notes/[id])",
+    "steps": [
+      "Create app/notes/[id]/page.tsx server component requiring auth",
+      "Load note via getNoteById and call notFound() if missing or not owned",
+      "Render client wrapper with title input and NoteEditor using parsed contentJson",
+      "Implement debounced autosave via PUT /api/notes/[id] for title and content",
+      "Show saving / saved / error status indicator",
+      "Verify edits persist after page reload"
+    ],
+    "passes": false
+  },
+  {
+    "category": "sharing",
+    "description": "Build ShareToggle component",
+    "steps": [
+      "Create components/ShareToggle.tsx client component with accessible switch/checkbox",
+      "Call POST /api/notes/[id]/share on toggle",
+      "Show public URL (/p/{slug}) with copy button when enabled",
+      "Hide URL when disabled and handle errors with rollback of toggle state",
+      "Add ShareToggle to note editor page"
+    ],
+    "passes": false
+  },
+  {
+    "category": "ui",
+    "description": "Build DeleteNoteButton component",
+    "steps": [
+      "Create components/DeleteNoteButton.tsx client component",
+      "Ask for confirmation before deleting",
+      "Call DELETE /api/notes/[id] and redirect to /dashboard on success",
+      "Display error message on failure",
+      "Add DeleteNoteButton to note editor page"
+    ],
+    "passes": false
+  },
+  {
+    "category": "sharing",
+    "description": "Build PublicNoteViewer component",
+    "steps": [
+      "Create components/PublicNoteViewer.tsx client component",
+      "Render TipTap content read-only using the same extensions with editable: false",
+      "Apply prose styling for formatted output",
+      "Do not use dangerouslySetInnerHTML"
+    ],
+    "passes": false
+  },
+  {
+    "category": "sharing",
+    "description": "Build public note page (/p/[slug])",
+    "steps": [
+      "Create app/p/[slug]/page.tsx server component (no auth required)",
+      "Load note via getNoteByPublicSlug and call notFound() when missing or not public",
+      "Render title and PublicNoteViewer",
+      "Show no owner information or user-specific navigation for anonymous viewers",
+      "Verify page returns 404 after sharing is disabled"
+    ],
+    "passes": false
+  },
+  {
+    "category": "ui",
+    "description": "Build landing page",
+    "steps": [
+      "Update app/page.tsx with short app description",
+      "Add Log in / Sign up CTAs for anonymous users",
+      "Show 'Go to dashboard' CTA for authenticated users"
+    ],
+    "passes": false
+  },
+  {
+    "category": "polish",
+    "description": "Add loading states, error handling and not-found pages",
+    "steps": [
+      "Add loading.tsx for dashboard and note editor routes",
+      "Add error.tsx boundaries for dashboard and notes routes",
+      "Add not-found.tsx with 'Note not found' message",
+      "Add toast or inline feedback for save, share and delete actions",
+      "Ensure DB errors are caught and return graceful messages"
+    ],
+    "passes": false
+  },
+  {
+    "category": "security",
+    "description": "Final security and end-to-end verification",
+    "steps": [
+      "Verify every note query in authenticated context filters by user_id",
+      "Verify all /api/notes endpoints return 401 when unauthenticated",
+      "Verify public endpoints/pages expose only title and content",
+      "Verify public slugs are 16+ random characters",
+      "Run full flow: sign up, create, edit, share, view publicly, unshare, delete, log out",
+      "Verify bun run lint and bun run build pass"
+    ],
+    "passes": false
+  }
+]
