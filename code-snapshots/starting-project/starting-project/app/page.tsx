@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { getCurrentUser } from '@/lib/auth';
 
 const CTA_CLASS =
-  'rounded-md px-4 py-2 text-sm font-medium transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current';
+  'rounded-md px-4 py-2 text-sm font-medium transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-link';
 
 export default async function LandingPage() {
   const user = await getCurrentUser();
@@ -17,14 +17,14 @@ export default async function LandingPage() {
       </p>
       <div className='flex flex-wrap justify-center gap-3'>
         {user ? (
-          <Link href='/dashboard' className={`${CTA_CLASS} bg-foreground text-background`}>
+          <Link href='/dashboard' className={`${CTA_CLASS} bg-primary text-primary-foreground`}>
             Go to dashboard
           </Link>
         ) : (
           <>
             <Link
               href='/authenticate?mode=signup'
-              className={`${CTA_CLASS} bg-foreground text-background`}
+              className={`${CTA_CLASS} bg-primary text-primary-foreground`}
             >
               Get started
             </Link>

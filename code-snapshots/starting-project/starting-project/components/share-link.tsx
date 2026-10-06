@@ -29,14 +29,14 @@ export function ShareLink({ slug }: ShareLinkProps): React.JSX.Element {
       <Link
         href={path}
         target='_blank'
-        className='min-w-0 truncate rounded-sm font-mono text-neutral-600 underline underline-offset-4 hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current dark:text-neutral-400'
+        className='min-w-0 truncate rounded-sm font-mono text-link underline underline-offset-4 hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-link'
       >
         {path}
       </Link>
       <button
         type='button'
         onClick={handleCopy}
-        className='rounded-md border border-neutral-300 px-2 py-1 text-xs font-medium transition-colors hover:bg-neutral-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current dark:border-neutral-700 dark:hover:bg-neutral-900'
+        className='rounded-md border border-neutral-300 px-2 py-1 text-xs font-medium transition-colors hover:bg-neutral-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-link dark:border-neutral-700 dark:hover:bg-neutral-900'
       >
         Copy link
       </button>

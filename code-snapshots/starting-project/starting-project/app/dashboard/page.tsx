@@ -14,7 +14,7 @@ export default async function DashboardPage() {
         <h1 className='text-3xl font-semibold tracking-tight'>Dashboard</h1>
         <Link
           href='/notes/new'
-          className='rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current'
+          className='rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-link'
         >
           New Note
         </Link>

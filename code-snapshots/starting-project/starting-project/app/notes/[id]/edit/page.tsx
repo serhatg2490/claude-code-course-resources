@@ -32,7 +32,7 @@ export default async function EditNotePage({ params }: EditNotePageProps) {
     <main className='mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-4 py-10'>
       <Link
         href={`/notes/${note.id}`}
-        className='self-start rounded-sm text-sm text-neutral-500 hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current'
+        className='self-start rounded-sm text-sm text-neutral-500 hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-link'
       >
         ← Back to note
       </Link>

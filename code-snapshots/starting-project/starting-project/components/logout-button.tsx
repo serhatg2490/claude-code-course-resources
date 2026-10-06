@@ -40,7 +40,7 @@ export function LogoutButton(): React.JSX.Element {
         type='button'
         onClick={handleClick}
         disabled={pending}
-        className='rounded-md border border-neutral-300 px-3 py-1.5 text-sm font-medium transition-colors hover:bg-neutral-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current disabled:opacity-60 dark:border-neutral-700 dark:hover:bg-neutral-900'
+        className='rounded-md border border-neutral-300 px-3 py-1.5 text-sm font-medium transition-colors hover:bg-neutral-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-link disabled:opacity-60 dark:border-neutral-700 dark:hover:bg-neutral-900'
       >
         {pending ? 'Logging out…' : 'Log out'}
       </button>

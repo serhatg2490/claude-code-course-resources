@@ -109,7 +109,7 @@ export function AuthForm({ mode }: AuthFormProps): React.JSX.Element {
       <button
         type='submit'
         disabled={isPending}
-        className='px-4 py-2 text-sm font-medium rounded-md bg-foreground text-background transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current disabled:opacity-60'
+        className='px-4 py-2 text-sm font-medium rounded-md bg-primary text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-link disabled:opacity-60'
       >
         {isPending ? 'Working…' : isSignUp ? 'Create account' : 'Log in'}
       </button>
