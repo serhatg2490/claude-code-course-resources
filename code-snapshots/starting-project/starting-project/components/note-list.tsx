@@ -15,7 +15,7 @@ export function NoteList({ notes }: NoteListProps): React.JSX.Element {
         <p className='mt-1 text-sm text-neutral-500'>
           <Link
             href='/notes/new'
-            className='underline underline-offset-4 hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current'
+            className='text-link underline underline-offset-4 hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-link'
           >
             Create your first note
           </Link>
@@ -32,7 +32,7 @@ export function NoteList({ notes }: NoteListProps): React.JSX.Element {
           <li key={note.id}>
             <Link
               href={`/notes/${note.id}`}
-              className='flex items-center justify-between gap-4 rounded-md border border-neutral-200 px-4 py-3 transition-colors hover:border-neutral-400 hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current dark:border-neutral-800 dark:hover:border-neutral-600 dark:hover:bg-neutral-900'
+              className='flex items-center justify-between gap-4 rounded-md border border-neutral-200 px-4 py-3 transition-colors hover:border-neutral-400 hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-link dark:border-neutral-800 dark:hover:border-neutral-600 dark:hover:bg-neutral-900'
             >
               <div className='min-w-0'>
                 <h2 className='truncate font-medium'>{note.title}</h2>

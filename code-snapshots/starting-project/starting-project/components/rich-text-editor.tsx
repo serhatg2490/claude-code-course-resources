@@ -113,7 +113,7 @@ export function RichTextEditor({
 
   return (
     <div
-      className={`overflow-hidden rounded-md border focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-current ${
+      className={`overflow-hidden rounded-md border focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-link ${
         invalid ? 'border-red-500' : 'border-neutral-300 dark:border-neutral-700'
       }`}
     >
@@ -138,7 +138,7 @@ export function RichTextEditor({
                   aria-pressed={pressed}
                   disabled={!editor}
                   onClick={() => editor && button.run(editor)}
-                  className='rounded px-2 py-1 text-sm font-medium transition-colors hover:bg-neutral-200 focus-visible:outline-2 focus-visible:outline-current aria-pressed:bg-foreground aria-pressed:text-background disabled:opacity-50 dark:hover:bg-neutral-800'
+                  className='rounded px-2 py-1 text-sm font-medium transition-colors hover:bg-neutral-200 focus-visible:outline-2 focus-visible:outline-link aria-pressed:bg-primary aria-pressed:text-primary-foreground disabled:opacity-50 dark:hover:bg-neutral-800'
                 >
                   {button.label}
                 </button>

@@ -36,7 +36,7 @@ export default async function AuthenticatePage({ searchParams }: AuthenticatePag
 
       <p className='text-sm text-neutral-500'>
         {isSignUp ? 'Already have an account? ' : "Don't have an account yet? "}
-        <Link href={isSignUp ? '/authenticate' : '/authenticate?mode=signup'} className='underline'>
+        <Link href={isSignUp ? '/authenticate' : '/authenticate?mode=signup'} className='text-link underline'>
           {isSignUp ? 'Log in' : 'Sign up'}
         </Link>
       </p>

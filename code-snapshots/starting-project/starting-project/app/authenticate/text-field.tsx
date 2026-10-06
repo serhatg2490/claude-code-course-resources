@@ -32,7 +32,7 @@ export function TextField({
         disabled={disabled}
         aria-invalid={Boolean(error)}
         aria-describedby={error ? errorId : undefined}
-        className='w-full px-3 py-2 text-base rounded-md border border-neutral-300 dark:border-neutral-700 aria-invalid:border-red-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current disabled:opacity-60'
+        className='w-full px-3 py-2 text-base rounded-md border border-neutral-300 dark:border-neutral-700 aria-invalid:border-red-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-link disabled:opacity-60'
       />
       {error && (
         <p id={errorId} className='text-sm text-red-600 dark:text-red-400'>

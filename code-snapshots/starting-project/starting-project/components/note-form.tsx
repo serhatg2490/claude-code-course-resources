@@ -84,7 +84,7 @@ export function NoteForm({
           disabled={isPending}
           aria-invalid={Boolean(titleError)}
           aria-describedby={titleError ? 'title-error' : undefined}
-          className='w-full rounded-md border border-neutral-300 px-3 py-2 text-base focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current disabled:opacity-60 aria-invalid:border-red-500 dark:border-neutral-700'
+          className='w-full rounded-md border border-neutral-300 px-3 py-2 text-base focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-link disabled:opacity-60 aria-invalid:border-red-500 dark:border-neutral-700'
         />
         {titleError && (
           <p id='title-error' className='text-sm text-red-600 dark:text-red-400'>
@@ -122,7 +122,7 @@ export function NoteForm({
             onChange={handlePublicChange}
             disabled={isPending}
             aria-describedby='share-hint'
-            className='size-4 accent-current'
+            className='size-4 accent-primary'
           />
           Share publicly — anyone with the link can view this note
         </label>
@@ -137,7 +137,7 @@ export function NoteForm({
         <button
           type='submit'
           disabled={isPending}
-          className='rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current disabled:opacity-60'
+          className='rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-link disabled:opacity-60'
         >
           {isPending ? pendingLabel : submitLabel}
         </button>

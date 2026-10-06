@@ -14,7 +14,7 @@ export async function SiteHeader(): Promise<React.JSX.Element> {
       >
         <Link
           href='/dashboard'
-          className='rounded-sm text-lg font-semibold tracking-tight focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-current'
+          className='rounded-sm text-lg font-semibold tracking-tight focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-link'
         >
           NextNotes
         </Link>
