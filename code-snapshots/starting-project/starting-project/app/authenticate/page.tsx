@@ -20,7 +20,7 @@ export default async function AuthenticatePage({ searchParams }: AuthenticatePag
   const isSignUp = mode === 'signup';
 
   return (
-    <main className='flex flex-1 flex-col items-center justify-center gap-8 p-8'>
+    <main className='page-container flex flex-1 flex-col items-center justify-center gap-8 py-8'>
       <header className='flex flex-col items-center gap-2 text-center'>
         <h1 className='text-4xl font-semibold tracking-tight'>
           {isSignUp ? 'Create your account' : 'Welcome back'}
@@ -36,7 +36,10 @@ export default async function AuthenticatePage({ searchParams }: AuthenticatePag
 
       <p className='text-sm text-neutral-500'>
         {isSignUp ? 'Already have an account? ' : "Don't have an account yet? "}
-        <Link href={isSignUp ? '/authenticate' : '/authenticate?mode=signup'} className='text-link underline'>
+        <Link
+          href={isSignUp ? '/authenticate' : '/authenticate?mode=signup'}
+          className='text-link underline'
+        >
           {isSignUp ? 'Log in' : 'Sign up'}
         </Link>
       </p>

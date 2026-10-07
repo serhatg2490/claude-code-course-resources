@@ -10,7 +10,7 @@ export async function SiteHeader(): Promise<React.JSX.Element> {
     <header className='border-b border-neutral-200 dark:border-neutral-800'>
       <nav
         aria-label='Main'
-        className='mx-auto flex h-14 w-full max-w-3xl items-center justify-between gap-4 px-4'
+        className='page-container flex h-14 items-center justify-between gap-4'
       >
         <Link
           href='/dashboard'

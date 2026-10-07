@@ -18,6 +18,14 @@
   --font-mono: var(--font-geist-mono);
 }
 
+/* Shared horizontal frame for the header and every page's main content. */
+@utility page-container {
+  margin-inline: auto;
+  width: 100%;
+  max-width: var(--container-3xl);
+  padding-inline: --spacing(4);
+}
+
 @media (prefers-color-scheme: dark) {
   :root {
     --background: #0a0a0a;

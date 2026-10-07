@@ -32,7 +32,7 @@ export default async function NotePage({ params }: NotePageProps) {
   const updated = formatSqliteDate(note.updatedAt);
 
   return (
-    <main className='mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-4 py-10'>
+    <main className='page-container flex flex-1 flex-col gap-6 py-10'>
       <Link
         href='/dashboard'
         className='self-start rounded-sm text-sm text-neutral-500 hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-link'

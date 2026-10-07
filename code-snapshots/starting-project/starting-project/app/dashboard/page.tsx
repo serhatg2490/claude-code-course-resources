@@ -9,7 +9,7 @@ export default async function DashboardPage() {
   const notes = await getNotesByUser(user.id);
 
   return (
-    <main className='mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-4 py-10'>
+    <main className='page-container flex flex-1 flex-col gap-6 py-10'>
       <div className='flex flex-wrap items-center justify-between gap-4'>
         <h1 className='text-3xl font-semibold tracking-tight'>Dashboard</h1>
         <Link
